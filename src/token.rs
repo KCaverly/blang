@@ -21,28 +21,29 @@ pub enum TokenType {
     LET,
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub struct Token {
     pub token_type: TokenType,
-    pub literal: Option<char>,
+    pub literal: Option<String>,
 }
 
 impl Token {
-    pub const fn new(token_type: TokenType, literal: Option<char>) -> Token {
-        return Token {
-            token_type,
-            literal,
-        };
+    pub fn new(token_type: TokenType, literal: Option<&str>) -> Token {
+        let lit: String;
+        if literal.is_some() {
+            lit = literal.unwrap().to_string();
+            return Token {
+                token_type,
+                literal: Some(lit),
+            };
+        } else {
+            return Token {
+                token_type,
+                literal: None,
+            };
+        }
     }
 }
 
-pub const TOKENS: [Token; 9] = [
-    Token::new(TokenType::ASSIGN, Some('=')),
-    Token::new(TokenType::PLUS, Some('+')),
-    Token::new(TokenType::LPAREN, Some('(')),
-    Token::new(TokenType::RPAREN, Some(')')),
-    Token::new(TokenType::LBRACE, Some('{')),
-    Token::new(TokenType::RBRACE, Some('}')),
-    Token::new(TokenType::COMMA, Some(',')),
-    Token::new(TokenType::SEMICOLON, Some(';')),
-    Token::new(TokenType::EOF, None),
-];
+#[cfg(test)]
+mod tests {}
