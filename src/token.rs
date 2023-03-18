@@ -23,11 +23,11 @@ pub enum TokenType {
 
 pub struct Token {
     pub token_type: TokenType,
-    literal: String,
+    pub literal: Option<char>,
 }
 
 impl Token {
-    pub fn new(token_type: TokenType, literal: String) -> Token {
+    pub const fn new(token_type: TokenType, literal: Option<char>) -> Token {
         return Token {
             token_type,
             literal,
@@ -35,7 +35,14 @@ impl Token {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-}
+pub const TOKENS: [Token; 9] = [
+    Token::new(TokenType::ASSIGN, Some('=')),
+    Token::new(TokenType::PLUS, Some('+')),
+    Token::new(TokenType::LPAREN, Some('(')),
+    Token::new(TokenType::RPAREN, Some(')')),
+    Token::new(TokenType::LBRACE, Some('{')),
+    Token::new(TokenType::RBRACE, Some('}')),
+    Token::new(TokenType::COMMA, Some(',')),
+    Token::new(TokenType::SEMICOLON, Some(';')),
+    Token::new(TokenType::EOF, None),
+];
