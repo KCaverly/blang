@@ -15,6 +15,9 @@ pub enum TokenType {
     GT,
     BANG,
 
+    EQ,
+    NEQ,
+
     COMMA,
     SEMICOLON,
 

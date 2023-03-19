@@ -28,41 +28,46 @@ impl Lexer {
         self.read_position += 1;
     }
 
-    pub fn read_span(&mut self) -> String {
-        let mut ident: Vec<char> = Vec::new();
-        while self.ch.unwrap().is_alphabetic() & !self.ch.unwrap().is_whitespace() {
-            println!("{}", self.ch.unwrap());
-            ident.push(self.ch.unwrap());
-            self.read_char();
+    pub fn peek_char(&mut self) -> Option<char> {
+        if self.read_position >= self.input.len() {
+            return None;
+        } else {
+            return Some(self.input[self.read_position]);
         }
-
-        let ident_string: String = ident.iter().collect();
-
-        return ident_string;
-    }
-
-    pub fn read_int(&mut self) -> String {
-        let mut int: Vec<char> = Vec::new();
-        while self.ch.unwrap().is_numeric() {
-            int.push(self.ch.unwrap());
-            self.read_char();
-        }
-
-        let int_string: String = int.iter().collect();
-        return int_string;
     }
 
     fn match_char(&mut self) -> Option<Token> {
         let token = match self.ch {
             // Math Operators
-            Some('=') => Some(Token::new(TokenType::ASSIGN, Some("=").as_deref())),
+            Some('=') => {
+                let peeked = self.peek_char();
+
+                if peeked.is_none() {
+                    Some(Token::new(TokenType::ASSIGN, Some("=")))
+                } else if peeked.unwrap() == '=' {
+                    Some(Token::new(TokenType::EQ, Some("==")))
+                } else {
+                    Some(Token::new(TokenType::ASSIGN, Some("=")))
+                }
+            }
+
+            Some('!') => {
+                let peeked = self.peek_char();
+                if peeked.is_none() {
+                    Some(Token::new(TokenType::BANG, Some("!")))
+                } else if peeked.unwrap() == '=' {
+                    Some(Token::new(TokenType::NEQ, Some("!=")))
+                } else {
+                    Some(Token::new(TokenType::BANG, Some("!")))
+                }
+            }
+
             Some('+') => Some(Token::new(TokenType::PLUS, Some("+").as_deref())),
             Some('/') => Some(Token::new(TokenType::SLASH, Some("/"))),
             Some('*') => Some(Token::new(TokenType::ASTERISK, Some("*"))),
             Some('-') => Some(Token::new(TokenType::MINUS, Some("-"))),
             Some('>') => Some(Token::new(TokenType::GT, Some(">"))),
             Some('<') => Some(Token::new(TokenType::LT, Some("<"))),
-            Some('!') => Some(Token::new(TokenType::BANG, Some("!"))),
 
             // Groupings
             Some('(') => Some(Token::new(
@@ -390,5 +395,24 @@ mod tests {
             let token = lexer.next_token();
             assert_eq!(token, test_token);
         }
+    }
+
+    #[test]
+    fn test_eq_neq_lexer() {
+        let test_string = r#"
+            10 == 10;
+            10 != 9;
+            "#;
+
+        let test_tokens = vec![
+            Token::new(TokenType::INT, Some("10")),
+            Token::new(TokenType::EQ, Some("==")),
+            Token::new(TokenType::INT, Some("10")),
+            Token::new(TokenType::SEMICOLON, Some(";")),
+            Token::new(TokenType::INT, Some("10")),
+            Token::new(TokenType::NEQ, Some("!=")),
+            Token::new(TokenType::INT, Some("9")),
+            Token::new(TokenType::SEMICOLON, Some(";")),
+        ];
     }
 }
