@@ -118,6 +118,8 @@ impl Lexer {
             "if" => Some(Token::new(TokenType::IF, Some("if"))),
             "else" => Some(Token::new(TokenType::ELSE, Some("else"))),
             "return" => Some(Token::new(TokenType::RETURN, Some("return"))),
+            "true" => Some(Token::new(TokenType::TRUE, Some("true"))),
+            "false" => Some(Token::new(TokenType::FALSE, Some("false"))),
             _ => Some(Token::new(TokenType::IDENT, Some(&*ident_string))),
         };
 
@@ -338,7 +340,54 @@ mod tests {
         let mut lexer = Lexer::new(test_string.to_string());
         for test_token in test_tokens {
             let token = lexer.next_token();
-            println!("{:?}", token);
+            assert_eq!(token, test_token);
+        }
+    }
+
+    #[test]
+    fn test_if_else_lexer() {
+        let test_string = r#"let x = 5;
+        let y = 10;
+
+        if (y > x) {
+            return true;
+        } else {
+            return false;
+        }
+        "#;
+
+        let test_tokens = vec![
+            Token::new(TokenType::LET, Some("let")),
+            Token::new(TokenType::IDENT, Some("x")),
+            Token::new(TokenType::ASSIGN, Some("=")),
+            Token::new(TokenType::INT, Some("5")),
+            Token::new(TokenType::SEMICOLON, Some(";")),
+            Token::new(TokenType::LET, Some("let")),
+            Token::new(TokenType::IDENT, Some("y")),
+            Token::new(TokenType::ASSIGN, Some("=")),
+            Token::new(TokenType::INT, Some("10")),
+            Token::new(TokenType::SEMICOLON, Some(";")),
+            Token::new(TokenType::IF, Some("if")),
+            Token::new(TokenType::LPAREN, Some("(")),
+            Token::new(TokenType::IDENT, Some("y")),
+            Token::new(TokenType::GT, Some(">")),
+            Token::new(TokenType::IDENT, Some("x")),
+            Token::new(TokenType::RPAREN, Some(")")),
+            Token::new(TokenType::LBRACE, Some("{")),
+            Token::new(TokenType::RETURN, Some("return")),
+            Token::new(TokenType::TRUE, Some("true")),
+            Token::new(TokenType::SEMICOLON, Some(";")),
+            Token::new(TokenType::RBRACE, Some("}")),
+            Token::new(TokenType::ELSE, Some("else")),
+            Token::new(TokenType::LBRACE, Some("{")),
+            Token::new(TokenType::RETURN, Some("return")),
+            Token::new(TokenType::FALSE, Some("false")),
+            Token::new(TokenType::SEMICOLON, Some(";")),
+            Token::new(TokenType::RBRACE, Some("}")),
+        ];
+        let mut lexer = Lexer::new(test_string.to_string());
+        for test_token in test_tokens {
+            let token = lexer.next_token();
             assert_eq!(token, test_token);
         }
     }
