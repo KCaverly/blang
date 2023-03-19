@@ -1,5 +1,6 @@
 use crate::token::{Token, TokenType};
 
+#[derive(Debug)]
 struct Lexer {
     input: Vec<char>,
     position: usize,
@@ -13,7 +14,7 @@ impl Lexer {
             input: input.chars().collect(),
             position: 0,
             read_position: 0,
-            ch: None,
+            ch: Some(' '),
         };
     }
 
@@ -29,7 +30,7 @@ impl Lexer {
 
     pub fn read_span(&mut self) -> String {
         let mut ident: Vec<char> = Vec::new();
-        while self.ch.unwrap().is_alphanumeric() {
+        while self.ch.unwrap().is_alphabetic() & !self.ch.unwrap().is_whitespace() {
             println!("{}", self.ch.unwrap());
             ident.push(self.ch.unwrap());
             self.read_char();
@@ -38,6 +39,107 @@ impl Lexer {
         let ident_string: String = ident.iter().collect();
 
         return ident_string;
+    }
+
+    pub fn read_int(&mut self) -> String {
+        let mut int: Vec<char> = Vec::new();
+        while self.ch.unwrap().is_numeric() {
+            int.push(self.ch.unwrap());
+            self.read_char();
+        }
+
+        let int_string: String = int.iter().collect();
+        return int_string;
+    }
+
+    fn match_char(&mut self) -> Option<Token> {
+        let token = match self.ch {
+            // Math Operators
+            Some('=') => Some(Token::new(
+                TokenType::ASSIGN,
+                Some(self.ch.unwrap().to_string()).as_deref(),
+            )),
+            Some('+') => Some(Token::new(
+                TokenType::PLUS,
+                Some(self.ch.unwrap().to_string()).as_deref(),
+            )),
+
+            // Groupings
+            Some('(') => Some(Token::new(
+                TokenType::LPAREN,
+                Some(self.ch.unwrap().to_string()).as_deref(),
+            )),
+            Some(')') => Some(Token::new(
+                TokenType::RPAREN,
+                Some(self.ch.unwrap().to_string()).as_deref(),
+            )),
+            Some('{') => Some(Token::new(
+                TokenType::LBRACE,
+                Some(self.ch.unwrap().to_string()).as_deref(),
+            )),
+            Some('}') => Some(Token::new(
+                TokenType::RBRACE,
+                Some(self.ch.unwrap().to_string()).as_deref(),
+            )),
+
+            // Flow
+            Some(',') => Some(Token::new(
+                TokenType::COMMA,
+                Some(self.ch.unwrap().to_string()).as_deref(),
+            )),
+
+            Some(';') => Some(Token::new(
+                TokenType::SEMICOLON,
+                Some(self.ch.unwrap().to_string()).as_deref(),
+            )),
+
+            _ => None,
+        };
+
+        return token;
+    }
+
+    fn match_alphabetic_span(&mut self) -> Option<Token> {
+        let mut ident: Vec<char> = Vec::new();
+        while self.ch.unwrap().is_alphabetic() & !self.ch.unwrap().is_whitespace() {
+            ident.push(self.ch.unwrap());
+            self.read_char();
+        }
+
+        let ident_string: String = ident.iter().collect();
+
+        if ident_string.len() == 0 {
+            return None;
+        }
+
+        let token = match &*ident_string {
+            "let" => Some(Token::new(TokenType::LET, Some("let"))),
+            "fn" => Some(Token::new(TokenType::FUNCTION, Some("fn"))),
+            _ => Some(Token::new(TokenType::IDENT, Some(&*ident_string))),
+        };
+
+        self.read_position -= 1;
+        self.position -= 1;
+
+        return token;
+    }
+
+    fn match_numeric_span(&mut self) -> Option<Token> {
+        let mut numeric: Vec<char> = Vec::new();
+        while self.ch.unwrap().is_numeric() {
+            numeric.push(self.ch.unwrap());
+            self.read_char();
+        }
+
+        let numeric_string: String = numeric.iter().collect();
+        if numeric_string.len() == 0 {
+            return None;
+        }
+
+        self.read_position -= 1;
+        self.position -= 1;
+
+        return Some(Token::new(TokenType::INT, Some(&*numeric_string)));
     }
 
     pub fn next_token(&mut self) -> Token {
@@ -50,63 +152,31 @@ impl Lexer {
         //      - Set character span to identifier
         // 4. If no match, set to ILLEGAL
 
+        let mut token: Option<Token>;
+
         self.read_char();
+        if self.ch.is_none() {
+            return Token::new(TokenType::EOF, None);
+        } else if self.ch.unwrap().is_whitespace() {
+            return self.next_token();
+        }
 
-        let token = match self.ch {
-            // EOF
-            None => Token::new(TokenType::EOF, None),
+        token = self.match_char();
+        if token.is_some() {
+            return token.unwrap();
+        }
 
-            // Math Operators
-            Some('=') => Token::new(
-                TokenType::ASSIGN,
-                Some(self.ch.unwrap().to_string()).as_deref(),
-            ),
-            Some('+') => Token::new(
-                TokenType::PLUS,
-                Some(self.ch.unwrap().to_string()).as_deref(),
-            ),
+        token = self.match_alphabetic_span();
+        if token.is_some() {
+            return token.unwrap();
+        }
 
-            // Groupings
-            Some('(') => Token::new(
-                TokenType::LPAREN,
-                Some(self.ch.unwrap().to_string()).as_deref(),
-            ),
-            Some(')') => Token::new(
-                TokenType::RPAREN,
-                Some(self.ch.unwrap().to_string()).as_deref(),
-            ),
-            Some('{') => Token::new(
-                TokenType::LBRACE,
-                Some(self.ch.unwrap().to_string()).as_deref(),
-            ),
-            Some('}') => Token::new(
-                TokenType::RBRACE,
-                Some(self.ch.unwrap().to_string()).as_deref(),
-            ),
+        token = self.match_numeric_span();
+        if token.is_some() {
+            return token.unwrap();
+        }
 
-            // Flow
-            Some(',') => Token::new(
-                TokenType::COMMA,
-                Some(self.ch.unwrap().to_string()).as_deref(),
-            ),
-
-            Some(';') => Token::new(
-                TokenType::SEMICOLON,
-                Some(self.ch.unwrap().to_string()).as_deref(),
-            ),
-
-            _ => {
-                let span = &*self.read_span();
-                let tkn = match span {
-                    "let" => Token::new(TokenType::LET, Some(span)),
-                    "fn" => Token::new(TokenType::FUNCTION, Some(span)),
-                    _ => Token::new(TokenType::IDENT, Some(span)),
-                };
-                tkn
-            }
-        };
-
-        return token;
+        return Token::new(TokenType::ILLEGAL, None);
     }
 }
 
@@ -160,6 +230,7 @@ mod tests {
             Token::new(TokenType::IDENT, Some("ten")),
             Token::new(TokenType::ASSIGN, Some("=")),
             Token::new(TokenType::INT, Some("10")),
+            Token::new(TokenType::SEMICOLON, Some(";")),
             Token::new(TokenType::LET, Some("let")),
             Token::new(TokenType::IDENT, Some("add")),
             Token::new(TokenType::ASSIGN, Some("=")),
