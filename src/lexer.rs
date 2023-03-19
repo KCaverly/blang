@@ -1,7 +1,7 @@
 use crate::token::{Token, TokenType};
 
 #[derive(Debug)]
-struct Lexer {
+pub struct Lexer {
     input: Vec<char>,
     position: usize,
     read_position: usize,
