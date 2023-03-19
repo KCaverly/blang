@@ -55,14 +55,14 @@ impl Lexer {
     fn match_char(&mut self) -> Option<Token> {
         let token = match self.ch {
             // Math Operators
-            Some('=') => Some(Token::new(
-                TokenType::ASSIGN,
-                Some(self.ch.unwrap().to_string()).as_deref(),
-            )),
-            Some('+') => Some(Token::new(
-                TokenType::PLUS,
-                Some(self.ch.unwrap().to_string()).as_deref(),
-            )),
+            Some('=') => Some(Token::new(TokenType::ASSIGN, Some("=").as_deref())),
+            Some('+') => Some(Token::new(TokenType::PLUS, Some("+").as_deref())),
+            Some('/') => Some(Token::new(TokenType::SLASH, Some("/"))),
+            Some('*') => Some(Token::new(TokenType::ASTERISK, Some("*"))),
+            Some('-') => Some(Token::new(TokenType::MINUS, Some("-"))),
+            Some('>') => Some(Token::new(TokenType::GT, Some(">"))),
+            Some('<') => Some(Token::new(TokenType::LT, Some("<"))),
+            Some('!') => Some(Token::new(TokenType::BANG, Some("!"))),
 
             // Groupings
             Some('(') => Some(Token::new(
@@ -115,6 +115,9 @@ impl Lexer {
         let token = match &*ident_string {
             "let" => Some(Token::new(TokenType::LET, Some("let"))),
             "fn" => Some(Token::new(TokenType::FUNCTION, Some("fn"))),
+            "if" => Some(Token::new(TokenType::IF, Some("if"))),
+            "else" => Some(Token::new(TokenType::ELSE, Some("else"))),
+            "return" => Some(Token::new(TokenType::RETURN, Some("return"))),
             _ => Some(Token::new(TokenType::IDENT, Some(&*ident_string))),
         };
 
@@ -262,6 +265,80 @@ mod tests {
         let mut lexer = Lexer::new(test_string);
         for test_token in test_tokens {
             let token = lexer.next_token();
+            assert_eq!(token, test_token);
+        }
+    }
+
+    #[test]
+    fn test_extended_lexer() {
+        let test_string = r#"let five = 5;
+        let ten = 10;
+
+        let add = fn(x, y) {
+            x + y;
+        };
+        
+        let result = add(five, ten);
+        !-/*5;
+        5 < 10 > 5;
+        
+        "#;
+
+        let test_tokens = vec![
+            Token::new(TokenType::LET, Some("let")),
+            Token::new(TokenType::IDENT, Some("five")),
+            Token::new(TokenType::ASSIGN, Some("=")),
+            Token::new(TokenType::INT, Some("5")),
+            Token::new(TokenType::SEMICOLON, Some(";")),
+            Token::new(TokenType::LET, Some("let")),
+            Token::new(TokenType::IDENT, Some("ten")),
+            Token::new(TokenType::ASSIGN, Some("=")),
+            Token::new(TokenType::INT, Some("10")),
+            Token::new(TokenType::SEMICOLON, Some(";")),
+            Token::new(TokenType::LET, Some("let")),
+            Token::new(TokenType::IDENT, Some("add")),
+            Token::new(TokenType::ASSIGN, Some("=")),
+            Token::new(TokenType::FUNCTION, Some("fn")),
+            Token::new(TokenType::LPAREN, Some("(")),
+            Token::new(TokenType::IDENT, Some("x")),
+            Token::new(TokenType::COMMA, Some(",")),
+            Token::new(TokenType::IDENT, Some("y")),
+            Token::new(TokenType::RPAREN, Some(")")),
+            Token::new(TokenType::LBRACE, Some("{")),
+            Token::new(TokenType::IDENT, Some("x")),
+            Token::new(TokenType::PLUS, Some("+")),
+            Token::new(TokenType::IDENT, Some("y")),
+            Token::new(TokenType::SEMICOLON, Some(";")),
+            Token::new(TokenType::RBRACE, Some("}")),
+            Token::new(TokenType::SEMICOLON, Some(";")),
+            Token::new(TokenType::LET, Some("let")),
+            Token::new(TokenType::IDENT, Some("result")),
+            Token::new(TokenType::ASSIGN, Some("=")),
+            Token::new(TokenType::IDENT, Some("add")),
+            Token::new(TokenType::LPAREN, Some("(")),
+            Token::new(TokenType::IDENT, Some("five")),
+            Token::new(TokenType::COMMA, Some(",")),
+            Token::new(TokenType::IDENT, Some("ten")),
+            Token::new(TokenType::RPAREN, Some(")")),
+            Token::new(TokenType::SEMICOLON, Some(";")),
+            Token::new(TokenType::BANG, Some("!")),
+            Token::new(TokenType::MINUS, Some("-")),
+            Token::new(TokenType::SLASH, Some("/")),
+            Token::new(TokenType::ASTERISK, Some("*")),
+            Token::new(TokenType::INT, Some("5")),
+            Token::new(TokenType::SEMICOLON, Some(";")),
+            Token::new(TokenType::INT, Some("5")),
+            Token::new(TokenType::LT, Some("<")),
+            Token::new(TokenType::INT, Some("10")),
+            Token::new(TokenType::GT, Some(">")),
+            Token::new(TokenType::INT, Some("5")),
+            Token::new(TokenType::SEMICOLON, Some(";")),
+        ];
+
+        let mut lexer = Lexer::new(test_string.to_string());
+        for test_token in test_tokens {
+            let token = lexer.next_token();
+            println!("{:?}", token);
             assert_eq!(token, test_token);
         }
     }

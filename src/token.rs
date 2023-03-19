@@ -8,6 +8,12 @@ pub enum TokenType {
 
     ASSIGN,
     PLUS,
+    MINUS,
+    SLASH,
+    ASTERISK,
+    LT,
+    GT,
+    BANG,
 
     COMMA,
     SEMICOLON,
@@ -19,6 +25,12 @@ pub enum TokenType {
 
     FUNCTION,
     LET,
+    IF,
+    ELSE,
+    RETURN,
+
+    TRUE,
+    FALSE,
 }
 
 #[derive(Debug, PartialEq, Eq)]
