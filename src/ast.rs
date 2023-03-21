@@ -99,11 +99,19 @@ impl Parser {
     }
 
     fn parse_statement(&self) -> Box<dyn Statement> {
-        return Box::new(self.parse_let_statement());
+        let token_type = self.current_token.clone().unwrap().token_type;
+        let statement = match token_type {
+            TokenType::LET => self.parse_let_statement(),
+            _ => panic!("Not PARSED!"),
+        };
+
+        println!("Statement: {:?}", statement.token_literal());
+
+        return statement;
     }
 
-    fn parse_let_statement(&self) -> LetStatement {
-        return LetStatement {
+    fn parse_let_statement(&self) -> Box<dyn Statement> {
+        return Box::new(LetStatement {
             token: self.current_token.clone().unwrap(),
             name: Identifier {
                 token: self.peek_token.clone().unwrap(),
@@ -113,7 +121,7 @@ impl Parser {
                 token: self.peek_token.clone().unwrap(),
                 value: "".to_string(),
             }),
-        };
+        });
     }
 }
 
