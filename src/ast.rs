@@ -92,7 +92,7 @@ impl Parser {
         let mut program = Program { statements: vec![] };
 
         // Iterate through all tokens in the Lexer
-        while self.current_token.clone().unwrap().token_type != TokenType::EOF {
+        while !self.current_token_is(TokenType::EOF) {
             let statement = self.parse_statement();
             program.statements.push(statement);
 
@@ -118,6 +118,15 @@ impl Parser {
         }
     }
 
+    fn expect_peek(&mut self, token_type: TokenType) -> bool {
+        if self.peek_token_is(token_type) {
+            self.next_token();
+            return true;
+        } else {
+            return false;
+        }
+    }
+
     fn parse_statement(&mut self) -> Box<dyn Statement> {
         let token_type = self.current_token.clone().unwrap().token_type;
         let statement = match token_type {
@@ -135,16 +144,18 @@ impl Parser {
     fn parse_let_statement(&mut self) -> Option<Box<dyn Statement>> {
         let unwrapped_cur = self.current_token.clone().unwrap();
 
-        if self.peek_token_is(TokenType::ASSIGN) {
+        if !self.expect_peek(TokenType::IDENT) {
             return None;
-        } else {
-            self.next_token();
         }
 
         let name = Identifier {
             token: self.current_token.clone().unwrap(),
             value: self.current_token.clone().unwrap().literal.unwrap(),
         };
+
+        if !self.expect_peek(TokenType::ASSIGN) {
+            return None;
+        }
 
         while !self.current_token_is(TokenType::SEMICOLON) {
             println!("{:?}", &self.current_token);
@@ -184,7 +195,6 @@ mod tests {
 
         let test_literals = vec!["x", "y", "foobar"];
         for i in 0..test_literals.len() {
-            println!("{}", i);
             test_let_statement(
                 program.statements[i]
                     .downcast_ref::<LetStatement>()
