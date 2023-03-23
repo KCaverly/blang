@@ -104,6 +104,21 @@ impl Expression for Identifier {
     }
 }
 
+struct IntegerLiteral {
+    token: Token,
+    value: usize,
+}
+
+impl Statement for IntegerLiteral {
+    fn token_literal(&self) -> Option<String> {
+        return self.token.literal.to_owned();
+    }
+    fn statement_node(&self) {}
+    fn to_string(&self) -> String {
+        return self.value.clone().to_string();
+    }
+}
+
 struct ExpressionStatement {
     token: Token,
     expression: Box<dyn Expression>,
@@ -182,7 +197,9 @@ impl<'a> Parser<'a> {
         let mut program = Program { statements: vec![] };
 
         // Iterate through all tokens in the Lexer
-        while !self.current_token_is(TokenType::EOF) {
+        // TODO: We have to handle semicolons at some point
+        while !self.current_token_is(TokenType::EOF) & !self.current_token_is(TokenType::SEMICOLON)
+        {
             let statement = self.parse_statement();
             program.statements.push(statement);
 
@@ -197,6 +214,21 @@ impl<'a> Parser<'a> {
             token: self.current_token.clone().unwrap(),
             value: self.current_token.clone().unwrap().literal.unwrap(),
         });
+    }
+
+    fn parse_integer(&self) -> Option<Box<dyn Statement>> {
+        println!("{:?}", self.current_token.clone().unwrap().token_type);
+        return Some(Box::new(IntegerLiteral {
+            token: self.current_token.clone().unwrap(),
+            value: self
+                .current_token
+                .clone()
+                .unwrap()
+                .literal
+                .unwrap()
+                .parse::<usize>()
+                .unwrap(),
+        }));
     }
 
     fn current_token_is(&self, token_type: TokenType) -> bool {
@@ -232,9 +264,11 @@ impl<'a> Parser<'a> {
 
     fn parse_statement(&mut self) -> Box<dyn Statement> {
         let token_type = self.current_token.clone().unwrap().token_type;
+        println!("{:?}", token_type);
         let statement = match token_type {
             TokenType::LET => self.parse_let_statement(),
             TokenType::RETURN => self.parse_return_statement(),
+            TokenType::INT => self.parse_integer(),
             _ => self.parse_expression_statement(),
         };
 
@@ -297,6 +331,10 @@ impl<'a> Parser<'a> {
 
         if self.peek_token_is(TokenType::SEMICOLON) {
             self.next_token();
+        }
+
+        if expr.is_none() {
+            return None;
         }
 
         return Some(Box::new(ExpressionStatement {
@@ -433,5 +471,27 @@ mod tests {
         let program = parser.parse();
 
         assert_eq!(program.statements.len(), 1);
+
+        assert_eq!(program.statements[0].token_literal().unwrap(), "foobar");
+    }
+
+    #[test]
+    fn test_integer_literal_expression() {
+        let test_input = "5;";
+
+        let lexer = Lexer::new(test_input.to_string());
+        let mut parser = Parser::new(lexer);
+
+        let program = parser.parse();
+
+        assert_eq!(program.statements.len(), 1);
+        assert_eq!(program.statements[0].token_literal().unwrap(), "5");
+        assert_eq!(
+            program.statements[0]
+                .downcast_ref::<IntegerLiteral>()
+                .unwrap()
+                .value,
+            5
+        );
     }
 }
