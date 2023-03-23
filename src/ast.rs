@@ -1,14 +1,18 @@
+extern crate downcast_rs;
 use crate::lexer::Lexer;
 use crate::token::{Token, TokenType};
+use downcast_rs::{impl_downcast, Downcast};
 
 trait Node {
     fn token_literal(&self) -> Option<String>;
 }
 
-trait Statement {
+trait Statement: Downcast {
     fn token_literal(&self) -> Option<String>;
     fn statement_node(&self);
 }
+
+impl_downcast!(Statement);
 
 trait Expression {
     fn token_literal(&self) -> Option<String>;
@@ -98,30 +102,63 @@ impl Parser {
         return program;
     }
 
-    fn parse_statement(&self) -> Box<dyn Statement> {
+    fn current_token_is(&self, token_type: TokenType) -> bool {
+        if self.current_token.clone().unwrap().token_type == token_type {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    fn peek_token_is(&self, token_type: TokenType) -> bool {
+        if self.peek_token.clone().unwrap().token_type == token_type {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    fn parse_statement(&mut self) -> Box<dyn Statement> {
         let token_type = self.current_token.clone().unwrap().token_type;
         let statement = match token_type {
             TokenType::LET => self.parse_let_statement(),
             _ => panic!("Not PARSED!"),
         };
 
-        println!("Statement: {:?}", statement.token_literal());
+        let unwrapped = statement.unwrap();
 
-        return statement;
+        println!("Statement: {:?}", &unwrapped.token_literal());
+
+        return unwrapped;
     }
 
-    fn parse_let_statement(&self) -> Box<dyn Statement> {
-        return Box::new(LetStatement {
+    fn parse_let_statement(&mut self) -> Option<Box<dyn Statement>> {
+        let unwrapped_cur = self.current_token.clone().unwrap();
+
+        if self.peek_token_is(TokenType::ASSIGN) {
+            return None;
+        } else {
+            self.next_token();
+        }
+
+        let name = Identifier {
             token: self.current_token.clone().unwrap(),
-            name: Identifier {
-                token: self.peek_token.clone().unwrap(),
-                value: "".to_string(),
-            },
+            value: self.current_token.clone().unwrap().literal.unwrap(),
+        };
+
+        while !self.current_token_is(TokenType::SEMICOLON) {
+            println!("{:?}", &self.current_token);
+            self.next_token();
+        }
+
+        return Some(Box::new(LetStatement {
+            token: unwrapped_cur,
+            name,
             value: Box::new(Identifier {
                 token: self.peek_token.clone().unwrap(),
                 value: "".to_string(),
             }),
-        });
+        }));
     }
 }
 
@@ -140,15 +177,42 @@ mod tests {
 
         let program = parser.parse();
 
-        for statement in &program.statements {
-            println!("{:?}", statement.token_literal());
-        }
-
         assert!(
             program.statements.len() == 3,
             "Statements Returned Does not Equal 3"
         );
 
-        panic!("HOW IS THIS WORKING!");
+        let test_literals = vec!["x", "y", "foobar"];
+        for i in 0..test_literals.len() {
+            println!("{}", i);
+            test_let_statement(
+                program.statements[i]
+                    .downcast_ref::<LetStatement>()
+                    .unwrap(),
+                test_literals[i].to_string(),
+            );
+        }
+    }
+
+    fn test_let_statement(statement: &LetStatement, name: String) {
+        // If statement does not equal let
+        if statement.token_literal().unwrap() != "let" {
+            panic!(
+                "Token Literal: {} != 'let'",
+                statement.token_literal().unwrap()
+            );
+        }
+
+        if statement.name.value != name {
+            panic!("Name: {} != '{}'", statement.name.value, name);
+        }
+
+        if statement.name.token_literal().unwrap() != name {
+            panic!(
+                "Name: {} != '{}'",
+                statement.name.token_literal().unwrap(),
+                name
+            );
+        }
     }
 }
