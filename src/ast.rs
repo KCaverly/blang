@@ -47,6 +47,19 @@ impl Statement for LetStatement {
     fn statement_node(&self) {}
 }
 
+struct ReturnStatement {
+    token: Token,
+    value: Box<dyn Expression>,
+}
+
+impl Statement for ReturnStatement {
+    fn token_literal(&self) -> Option<String> {
+        return self.token.literal.to_owned();
+    }
+
+    fn statement_node(&self) {}
+}
+
 struct Identifier {
     token: Token,
     value: String,
@@ -63,6 +76,7 @@ struct Parser {
     lexer: Lexer,
     current_token: Option<Token>,
     peek_token: Option<Token>,
+    errors: Vec<String>,
 }
 
 impl Parser {
@@ -71,6 +85,7 @@ impl Parser {
             lexer,
             current_token: None,
             peek_token: None,
+            errors: vec![],
         };
 
         p.next_token();
@@ -123,6 +138,12 @@ impl Parser {
             self.next_token();
             return true;
         } else {
+            let msg = format!(
+                "Expected next token to be {:?}, got {:?} instead",
+                self.peek_token.clone().unwrap().token_type,
+                token_type
+            );
+            self.errors.push(msg);
             return false;
         }
     }
@@ -131,12 +152,11 @@ impl Parser {
         let token_type = self.current_token.clone().unwrap().token_type;
         let statement = match token_type {
             TokenType::LET => self.parse_let_statement(),
+            TokenType::RETURN => self.parse_return_statement(),
             _ => panic!("Not PARSED!"),
         };
 
         let unwrapped = statement.unwrap();
-
-        println!("Statement: {:?}", &unwrapped.token_literal());
 
         return unwrapped;
     }
@@ -158,13 +178,29 @@ impl Parser {
         }
 
         while !self.current_token_is(TokenType::SEMICOLON) {
-            println!("{:?}", &self.current_token);
             self.next_token();
         }
 
         return Some(Box::new(LetStatement {
             token: unwrapped_cur,
             name,
+            value: Box::new(Identifier {
+                token: self.peek_token.clone().unwrap(),
+                value: "".to_string(),
+            }),
+        }));
+    }
+
+    fn parse_return_statement(&mut self) -> Option<Box<dyn Statement>> {
+        let og_token = self.current_token.clone();
+        self.next_token();
+
+        while !self.current_token_is(TokenType::SEMICOLON) {
+            self.next_token();
+        }
+
+        return Some(Box::new(ReturnStatement {
+            token: og_token.unwrap(),
             value: Box::new(Identifier {
                 token: self.peek_token.clone().unwrap(),
                 value: "".to_string(),
@@ -178,7 +214,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_simple_parser() {
+    fn test_let_statements() {
         let test_string = r#"let x = 5;
         let y = 10;
         let foobar = 838383;"#;
@@ -202,6 +238,8 @@ mod tests {
                 test_literals[i].to_string(),
             );
         }
+
+        assert_eq!(parser.errors.len(), 0);
     }
 
     fn test_let_statement(statement: &LetStatement, name: String) {
@@ -223,6 +261,25 @@ mod tests {
                 statement.name.token_literal().unwrap(),
                 name
             );
+        }
+    }
+
+    #[test]
+    fn test_return_statements() {
+        let test_string = r#"return 5;
+        return 10;
+        return 993322;"#;
+
+        let lexer = Lexer::new(test_string.to_string());
+        let mut parser = Parser::new(lexer);
+
+        let program = parser.parse();
+
+        assert_eq!(parser.errors.len(), 0);
+        assert_eq!(program.statements.len(), 3);
+
+        for statement in program.statements {
+            assert_eq!(statement.token_literal(), Some("return".to_string()));
         }
     }
 }
