@@ -1,5 +1,4 @@
 extern crate downcast_rs;
-use std::collections::HashMap;
 
 use crate::lexer::Lexer;
 use crate::token::{Token, TokenType};
@@ -12,17 +11,21 @@ trait Node {
 
 trait Statement: Downcast {
     fn token_literal(&self) -> Option<String>;
-    fn statement_node(&self);
     fn to_string(&self) -> String;
 }
 
 impl_downcast!(Statement);
 
-trait Expression {
+trait Expression: Downcast {
     fn token_literal(&self) -> Option<String>;
-    fn expression_node(&self);
     fn to_string(&self) -> String;
 }
+
+impl_downcast!(Expression);
+
+/////////////
+// Program //
+/////////////
 
 struct Program {
     statements: Vec<Box<dyn Statement>>,
@@ -36,6 +39,7 @@ impl Node for Program {
             return None;
         }
     }
+
     fn to_string(&self) -> String {
         let mut str: Vec<String> = Vec::new();
         for statement in &self.statements {
@@ -45,9 +49,13 @@ impl Node for Program {
     }
 }
 
+///////////////
+// Statement //
+///////////////
+
 struct LetStatement {
     token: Token,
-    name: Identifier,
+    name: IdentifierExpression,
     value: Box<dyn Expression>,
 }
 
@@ -55,8 +63,6 @@ impl Statement for LetStatement {
     fn token_literal(&self) -> Option<String> {
         return self.token.literal.to_owned();
     }
-
-    fn statement_node(&self) {}
 
     fn to_string(&self) -> String {
         return format!(
@@ -79,43 +85,12 @@ impl Statement for ReturnStatement {
         return self.token.literal.to_owned();
     }
 
-    fn statement_node(&self) {}
     fn to_string(&self) -> String {
         return format!(
             "{} {}",
             self.token_literal().unwrap(),
             self.value.to_string()
         );
-    }
-}
-
-struct Identifier {
-    token: Token,
-    value: String,
-}
-
-impl Expression for Identifier {
-    fn token_literal(&self) -> Option<String> {
-        return self.token.literal.to_owned();
-    }
-    fn expression_node(&self) {}
-    fn to_string(&self) -> String {
-        return self.value.clone();
-    }
-}
-
-struct IntegerLiteral {
-    token: Token,
-    value: usize,
-}
-
-impl Statement for IntegerLiteral {
-    fn token_literal(&self) -> Option<String> {
-        return self.token.literal.to_owned();
-    }
-    fn statement_node(&self) {}
-    fn to_string(&self) -> String {
-        return self.value.clone().to_string();
     }
 }
 
@@ -128,77 +103,132 @@ impl Statement for ExpressionStatement {
     fn token_literal(&self) -> Option<String> {
         return self.token.literal.to_owned();
     }
-    fn statement_node(&self) {}
     fn to_string(&self) -> String {
         return self.expression.to_string();
     }
 }
 
-enum Precedence {
-    LOWEST = 1,
-    EQUALS = 2,
-    LESSGREATER = 3,
-    SUM = 4,
-    PRODUCT = 5,
-    PREFIX = 6,
-    CALL = 7,
+struct IntegerLiteralStatement {
+    token: Token,
+    value: usize,
 }
 
-struct Parser<'a> {
+impl Statement for IntegerLiteralStatement {
+    fn token_literal(&self) -> Option<String> {
+        return self.token.literal.to_owned();
+    }
+    fn to_string(&self) -> String {
+        return self.value.clone().to_string();
+    }
+}
+
+////////////////
+// Expression //
+////////////////
+
+struct IdentifierExpression {
+    token: Token,
+    value: String,
+}
+
+impl Expression for IdentifierExpression {
+    fn token_literal(&self) -> Option<String> {
+        return self.token.literal.to_owned();
+    }
+    fn to_string(&self) -> String {
+        return self.value.clone();
+    }
+}
+
+struct PrefixExpression {
+    token: Token,
+    operator: String,
+    right: Box<dyn Expression>,
+}
+
+impl Expression for PrefixExpression {
+    fn token_literal(&self) -> Option<String> {
+        return self.token.literal.to_owned();
+    }
+    fn to_string(&self) -> String {
+        return format!(
+            "({}{}{})",
+            self.token_literal().unwrap(),
+            self.operator,
+            self.right.to_string()
+        );
+    }
+}
+
+////////////
+// Parser //
+////////////
+
+struct Parser {
     lexer: Lexer,
-    current_token: Option<Token>,
-    peek_token: Option<Token>,
+    current_token: Token,
+    peek_token: Token,
     errors: Vec<String>,
-    prefix_parse_fns: HashMap<TokenType, &'a dyn Fn() -> Box<dyn Expression>>,
-    infix_parse_fns: HashMap<TokenType, &'a dyn Fn(Box<dyn Expression>) -> Box<dyn Expression>>,
 }
 
-impl<'a> Parser<'a> {
-    fn new(lexer: Lexer) -> Parser<'a> {
-        let mut p = Parser {
+impl Parser {
+    pub fn new(mut lexer: Lexer) -> Parser {
+        let current_token = lexer.next_token();
+        let peek_token = lexer.next_token();
+
+        let parser = Parser {
             lexer,
-            current_token: None,
-            peek_token: None,
+            current_token,
+            peek_token,
             errors: vec![],
-            prefix_parse_fns: HashMap::new(),
-            infix_parse_fns: HashMap::new(),
         };
 
-        // Load the First Two Tokens
-        p.next_token();
-        p.next_token();
-
-        return p;
-    }
-
-    fn register_prefix(
-        &mut self,
-        token_type: TokenType,
-        function: &'a dyn Fn() -> Box<dyn Expression>,
-    ) {
-        self.prefix_parse_fns.insert(token_type, function);
-    }
-
-    fn register_infix(
-        &mut self,
-        token_type: TokenType,
-        function: &'a dyn Fn(Box<dyn Expression>) -> Box<dyn Expression>,
-    ) {
-        self.infix_parse_fns.insert(token_type, function);
+        return parser;
     }
 
     fn next_token(&mut self) {
         self.current_token = self.peek_token.clone();
-        self.peek_token = Some(self.lexer.next_token());
+        self.peek_token = self.lexer.next_token();
     }
 
-    fn parse(&mut self) -> Program {
-        // Create a Blank Program to Start
+    fn current_token_is(&self, token_type: &TokenType) -> bool {
+        if &self.current_token.token_type == token_type {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    fn peek_token_is(&self, token_type: &TokenType) -> bool {
+        if &self.peek_token.token_type == token_type {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    fn expect_peek(&mut self, token_type: &TokenType) -> bool {
+        if self.peek_token_is(token_type) {
+            self.next_token();
+            return true;
+        } else {
+            let msg = format!(
+                "Expected next token to be {:?}, got {:?} instead",
+                &self.peek_token.token_type, token_type
+            );
+            self.errors.push(msg);
+            return false;
+        }
+    }
+
+    pub fn parse(&mut self) -> Program {
+        // Create Blank Program to Start
         let mut program = Program { statements: vec![] };
 
-        // Iterate through all tokens in the Lexer
+        // Iterate through all token in the Lexer
         // TODO: We have to handle semicolons at some point
-        while !self.current_token_is(TokenType::EOF) & !self.current_token_is(TokenType::SEMICOLON)
+        while !self.current_token_is(&TokenType::EOF)
+            & !self.current_token_is(&TokenType::SEMICOLON)
         {
             let statement = self.parse_statement();
             program.statements.push(statement);
@@ -209,152 +239,77 @@ impl<'a> Parser<'a> {
         return program;
     }
 
-    fn parse_identifier(&self) -> Box<dyn Expression> {
-        return Box::new(Identifier {
-            token: self.current_token.clone().unwrap(),
-            value: self.current_token.clone().unwrap().literal.unwrap(),
-        });
+    fn parse_statement(&mut self) -> Box<dyn Statement> {
+        let token_type = self.current_token.token_type;
+        let statement = match token_type {
+            TokenType::LET => self.parse_let_statement(),
+            TokenType::RETURN => self.parse_return_statement(),
+            TokenType::INT => self.parse_integer_statement(),
+            _ => panic!("PANIC!"),
+        };
+
+        return statement;
     }
 
-    fn parse_integer(&self) -> Option<Box<dyn Statement>> {
-        println!("{:?}", self.current_token.clone().unwrap().token_type);
-        return Some(Box::new(IntegerLiteral {
-            token: self.current_token.clone().unwrap(),
+    fn parse_let_statement(&mut self) -> Box<dyn Statement> {
+        let og_token = self.current_token.clone();
+
+        if !self.expect_peek(&TokenType::IDENT) {
+            panic!("Identifier structured incorrectly");
+        }
+
+        let name = IdentifierExpression {
+            token: self.current_token.clone(),
+            value: self.current_token.clone().literal.unwrap(),
+        };
+
+        if !self.expect_peek(&TokenType::ASSIGN) {
+            panic!("Identifier structured incorrectly");
+        }
+
+        while !self.current_token_is(&TokenType::SEMICOLON) {
+            self.next_token();
+        }
+
+        // TODO: For now this value returned is a dummy identifier.
+        // TODO: This will have to be updated at some future point
+        return Box::new(LetStatement {
+            token: og_token,
+            name,
+            value: Box::new(IdentifierExpression {
+                token: self.peek_token.clone(),
+                value: "".to_string(),
+            }),
+        });
+    }
+    fn parse_return_statement(&mut self) -> Box<dyn Statement> {
+        let og_token = self.current_token.clone();
+        self.next_token();
+
+        // TODO: Again this is not correctly parsing the value
+        while !self.current_token_is(&TokenType::SEMICOLON) {
+            self.next_token();
+        }
+
+        return Box::new(ReturnStatement {
+            token: og_token,
+            value: Box::new(IdentifierExpression {
+                token: self.peek_token.clone(),
+                value: "".to_string(),
+            }),
+        });
+    }
+    fn parse_integer_statement(&mut self) -> Box<dyn Statement> {
+        return Box::new(IntegerLiteralStatement {
+            token: self.current_token.clone(),
             value: self
                 .current_token
                 .clone()
-                .unwrap()
                 .literal
                 .unwrap()
                 .parse::<usize>()
                 .unwrap(),
-        }));
-    }
-
-    fn current_token_is(&self, token_type: TokenType) -> bool {
-        if self.current_token.clone().unwrap().token_type == token_type {
-            return true;
-        } else {
-            return false;
-        }
-    }
-
-    fn peek_token_is(&self, token_type: TokenType) -> bool {
-        if self.peek_token.clone().unwrap().token_type == token_type {
-            return true;
-        } else {
-            return false;
-        }
-    }
-
-    fn expect_peek(&mut self, token_type: TokenType) -> bool {
-        if self.peek_token_is(token_type) {
-            self.next_token();
-            return true;
-        } else {
-            let msg = format!(
-                "Expected next token to be {:?}, got {:?} instead",
-                self.peek_token.clone().unwrap().token_type,
-                token_type
-            );
-            self.errors.push(msg);
-            return false;
-        }
-    }
-
-    fn parse_statement(&mut self) -> Box<dyn Statement> {
-        let token_type = self.current_token.clone().unwrap().token_type;
-        println!("{:?}", token_type);
-        let statement = match token_type {
-            TokenType::LET => self.parse_let_statement(),
-            TokenType::RETURN => self.parse_return_statement(),
-            TokenType::INT => self.parse_integer(),
-            _ => self.parse_expression_statement(),
-        };
-
-        let unwrapped = statement.unwrap();
-
-        return unwrapped;
-    }
-
-    fn parse_let_statement(&mut self) -> Option<Box<dyn Statement>> {
-        let unwrapped_cur = self.current_token.clone().unwrap();
-
-        if !self.expect_peek(TokenType::IDENT) {
-            return None;
-        }
-
-        let name = Identifier {
-            token: self.current_token.clone().unwrap(),
-            value: self.current_token.clone().unwrap().literal.unwrap(),
-        };
-
-        if !self.expect_peek(TokenType::ASSIGN) {
-            return None;
-        }
-
-        while !self.current_token_is(TokenType::SEMICOLON) {
-            self.next_token();
-        }
-
-        return Some(Box::new(LetStatement {
-            token: unwrapped_cur,
-            name,
-            value: Box::new(Identifier {
-                token: self.peek_token.clone().unwrap(),
-                value: "".to_string(),
-            }),
-        }));
-    }
-
-    fn parse_return_statement(&mut self) -> Option<Box<dyn Statement>> {
-        let og_token = self.current_token.clone();
-        self.next_token();
-
-        while !self.current_token_is(TokenType::SEMICOLON) {
-            self.next_token();
-        }
-
-        return Some(Box::new(ReturnStatement {
-            token: og_token.unwrap(),
-            value: Box::new(Identifier {
-                token: self.peek_token.clone().unwrap(),
-                value: "".to_string(),
-            }),
-        }));
-    }
-
-    fn parse_expression_statement(&mut self) -> Option<Box<dyn Statement>> {
-        let og_token = self.current_token.clone();
-
-        let expr = self.parse_expression(Precedence::LOWEST);
-
-        if self.peek_token_is(TokenType::SEMICOLON) {
-            self.next_token();
-        }
-
-        if expr.is_none() {
-            return None;
-        }
-
-        return Some(Box::new(ExpressionStatement {
-            token: og_token.unwrap(),
-            expression: expr.unwrap(),
-        }));
-    }
-
-    fn parse_prefix(&self) -> Option<Box<dyn Expression>> {
-        let current_token_type = self.current_token.clone().unwrap().token_type;
-        match current_token_type {
-            TokenType::IDENT => Some(self.parse_identifier()),
-            _ => None,
-        }
-    }
-
-    fn parse_expression(&self, precedence: Precedence) -> Option<Box<dyn Expression>> {
-        let prefix = self.parse_prefix();
-
-        return prefix;
+        });
     }
 }
 
@@ -433,50 +388,7 @@ mod tests {
     }
 
     #[test]
-    fn test_string() {
-        let test_program = Program {
-            statements: vec![Box::new(LetStatement {
-                token: Token {
-                    token_type: TokenType::LET,
-                    literal: Some("let".to_string()),
-                },
-                name: Identifier {
-                    token: Token {
-                        token_type: TokenType::IDENT,
-                        literal: Some("myVar".to_string()),
-                    },
-                    value: "myVar".to_string(),
-                },
-                value: Box::new(Identifier {
-                    token: Token {
-                        token_type: TokenType::IDENT,
-                        literal: Some("anotherVar".to_string()),
-                    },
-                    value: "anotherVar".to_string(),
-                }),
-            })],
-        };
-
-        // This doesnt include semicolons yet - not sure where those come in
-        assert_eq!(test_program.to_string(), "let myVar = anotherVar");
-    }
-
-    #[test]
-    fn test_identifier_expression() {
-        let test_input = "foobar;";
-
-        let lexer = Lexer::new(test_input.to_string());
-        let mut parser = Parser::new(lexer);
-
-        let program = parser.parse();
-
-        assert_eq!(program.statements.len(), 1);
-
-        assert_eq!(program.statements[0].token_literal().unwrap(), "foobar");
-    }
-
-    #[test]
-    fn test_integer_literal_expression() {
+    fn test_integer_literal_statements() {
         let test_input = "5;";
 
         let lexer = Lexer::new(test_input.to_string());
@@ -488,10 +400,23 @@ mod tests {
         assert_eq!(program.statements[0].token_literal().unwrap(), "5");
         assert_eq!(
             program.statements[0]
-                .downcast_ref::<IntegerLiteral>()
+                .downcast_ref::<IntegerLiteralStatement>()
                 .unwrap()
                 .value,
             5
         );
+    }
+
+    #[test]
+    fn test_prefix_statements() {
+        let test_inputs = vec!["!5;", "-15;"];
+        for test_input in test_inputs {
+            let lexer = Lexer::new(test_input.to_string());
+            let mut parser = Parser::new(lexer);
+
+            let program = parser.parse();
+
+            assert_eq!(program.statements.len(), 1);
+        }
     }
 }
