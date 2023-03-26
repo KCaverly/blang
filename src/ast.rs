@@ -108,20 +108,6 @@ impl Statement for ExpressionStatement {
     }
 }
 
-struct IntegerLiteralStatement {
-    token: Token,
-    value: usize,
-}
-
-impl Statement for IntegerLiteralStatement {
-    fn token_literal(&self) -> Option<String> {
-        return self.token.literal.to_owned();
-    }
-    fn to_string(&self) -> String {
-        return self.value.clone().to_string();
-    }
-}
-
 ////////////////
 // Expression //
 ////////////////
@@ -140,6 +126,20 @@ impl Expression for IdentifierExpression {
     }
 }
 
+struct IntegerLiteralExpression {
+    token: Token,
+    value: usize,
+}
+
+impl Expression for IntegerLiteralExpression {
+    fn token_literal(&self) -> Option<String> {
+        return self.token.literal.to_owned();
+    }
+    fn to_string(&self) -> String {
+        return self.value.clone().to_string();
+    }
+}
+
 struct PrefixExpression {
     token: Token,
     operator: String,
@@ -151,12 +151,7 @@ impl Expression for PrefixExpression {
         return self.token.literal.to_owned();
     }
     fn to_string(&self) -> String {
-        return format!(
-            "({}{}{})",
-            self.token_literal().unwrap(),
-            self.operator,
-            self.right.to_string()
-        );
+        return format!("({}{})", self.operator, self.right.to_string());
     }
 }
 
@@ -244,7 +239,9 @@ impl Parser {
         let statement = match token_type {
             TokenType::LET => self.parse_let_statement(),
             TokenType::RETURN => self.parse_return_statement(),
-            TokenType::INT => self.parse_integer_statement(),
+            TokenType::INT => self.parse_expression_statement(),
+            TokenType::BANG => self.parse_expression_statement(),
+            TokenType::MINUS => self.parse_expression_statement(),
             _ => panic!("PANIC!"),
         };
 
@@ -299,8 +296,41 @@ impl Parser {
             }),
         });
     }
-    fn parse_integer_statement(&mut self) -> Box<dyn Statement> {
-        return Box::new(IntegerLiteralStatement {
+    // fn parse_integer_statement(&mut self) -> Box<dyn Statement> {
+    //     return Box::new(IntegerLiteralStatement {
+    //         token: self.current_token.clone(),
+    //         value: self
+    //             .current_token
+    //             .clone()
+    //             .literal
+    //             .unwrap()
+    //             .parse::<usize>()
+    //             .unwrap(),
+    //     });
+    // }
+    fn parse_expression_statement(&mut self) -> Box<dyn Statement> {
+        let expr = self.parse_expression();
+        return Box::new(ExpressionStatement {
+            token: self.current_token.clone(),
+            expression: expr,
+        });
+    }
+
+    fn parse_expression(&mut self) -> Box<dyn Expression> {
+        let token_type = self.current_token.token_type;
+        println!("{:?}", token_type);
+        let expr = match token_type {
+            TokenType::INT => self.parse_integer_expression(),
+            TokenType::BANG => self.parse_prefix_expression(),
+            TokenType::MINUS => self.parse_prefix_expression(),
+
+            _ => panic!("PANICKING!"),
+        };
+        return expr;
+    }
+
+    fn parse_integer_expression(&mut self) -> Box<dyn Expression> {
+        return Box::new(IntegerLiteralExpression {
             token: self.current_token.clone(),
             value: self
                 .current_token
@@ -309,6 +339,16 @@ impl Parser {
                 .unwrap()
                 .parse::<usize>()
                 .unwrap(),
+        });
+    }
+    fn parse_prefix_expression(&mut self) -> Box<dyn Expression> {
+        let og_token = self.current_token.clone();
+        self.next_token();
+
+        return Box::new(PrefixExpression {
+            token: og_token.clone(),
+            operator: og_token.literal.clone().unwrap(),
+            right: self.parse_expression(),
         });
     }
 }
@@ -400,7 +440,10 @@ mod tests {
         assert_eq!(program.statements[0].token_literal().unwrap(), "5");
         assert_eq!(
             program.statements[0]
-                .downcast_ref::<IntegerLiteralStatement>()
+                .downcast_ref::<ExpressionStatement>()
+                .unwrap()
+                .expression
+                .downcast_ref::<IntegerLiteralExpression>()
                 .unwrap()
                 .value,
             5
