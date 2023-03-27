@@ -322,6 +322,7 @@ impl Parser {
             TokenType::IDENT => self.parse_expression_statement(),
             TokenType::TRUE => self.parse_expression_statement(),
             TokenType::FALSE => self.parse_expression_statement(),
+            TokenType::LPAREN => self.parse_expression_statement(),
             _ => panic!("PANIC!"),
         };
 
@@ -396,6 +397,7 @@ impl Parser {
             TokenType::IDENT => Some(self.parse_identifier_expression()),
             TokenType::TRUE => Some(self.parse_boolean_expression()),
             TokenType::FALSE => Some(self.parse_boolean_expression()),
+            TokenType::LPAREN => Some(self.parse_grouped_expression()),
             _ => None,
         };
 
@@ -479,6 +481,17 @@ impl Parser {
             operator: og_token.clone().literal.unwrap(),
             right: self.parse_expression(precedence),
         });
+    }
+
+    fn parse_grouped_expression(&mut self) -> Box<dyn Expression> {
+        self.next_token();
+
+        let expr = self.parse_expression(PrecedenceType::LOWEST);
+        if !self.expect_peek(&TokenType::RPAREN) {
+            panic!("{}", "DOES NOT INCLUDE RPAREN");
+        }
+
+        return expr;
     }
 }
 
@@ -694,6 +707,32 @@ mod tests {
             ("false;", "false"),
             ("3 > 5 == false;", "((3 > 5) == false)"),
             ("3 < 5 == true;", "((3 < 5) == true)"),
+        ];
+
+        for test_input in test_inputs {
+            let lexer = Lexer::new(test_input.0.to_string());
+            let mut parser = Parser::new(lexer);
+            let program = parser.parse();
+            assert_eq!(program.statements.len(), 1);
+
+            assert_eq!(
+                program.statements[0]
+                    .downcast_ref::<ExpressionStatement>()
+                    .unwrap()
+                    .to_string(),
+                test_input.1
+            );
+        }
+    }
+
+    #[test]
+    fn test_grouped_statements() {
+        let test_inputs = vec![
+            ("1 + (2 + 3) + 4;", "((1 + (2 + 3)) + 4)"),
+            ("(5 + 5) * 2;", "((5 + 5) * 2)"),
+            ("2 / (5 + 5)", "(2 / (5 + 5))"),
+            ("-(5 + 5)", "(-(5 + 5))"),
+            ("!(true == true)", "(!(true == true))"),
         ];
 
         for test_input in test_inputs {
