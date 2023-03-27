@@ -111,6 +111,24 @@ impl Statement for ExpressionStatement {
     }
 }
 
+struct BlockStatement {
+    token: Token,
+    statements: Vec<Box<dyn Statement>>,
+}
+
+impl Statement for BlockStatement {
+    fn token_literal(&self) -> Option<String> {
+        return self.token.literal.to_owned();
+    }
+    fn to_string(&self) -> String {
+        let mut str: Vec<String> = Vec::new();
+        for statement in &self.statements {
+            str.push(statement.to_string());
+        }
+        return str.join(" ");
+    }
+}
+
 ////////////////
 // Expression //
 ////////////////
@@ -190,6 +208,36 @@ impl Expression for InfixExpression {
             self.operator,
             self.right.to_string()
         );
+    }
+}
+
+struct IfExpression {
+    token: Token,
+    condition: Box<dyn Expression>,
+    consequence: Box<dyn Statement>,
+    alternative: Option<Box<dyn Statement>>,
+}
+
+impl Expression for IfExpression {
+    fn token_literal(&self) -> Option<String> {
+        return self.token.literal.to_owned();
+    }
+    fn to_string(&self) -> String {
+        if self.alternative.is_some() {
+            let alt = self.alternative.as_ref().unwrap();
+            return format!(
+                "if {} {} else {}",
+                self.condition.to_string(),
+                self.consequence.to_string(),
+                alt.to_string()
+            );
+        } else {
+            return format!(
+                "if {} {}",
+                self.condition.to_string(),
+                self.consequence.to_string()
+            );
+        }
     }
 }
 
@@ -323,6 +371,7 @@ impl Parser {
             TokenType::TRUE => self.parse_expression_statement(),
             TokenType::FALSE => self.parse_expression_statement(),
             TokenType::LPAREN => self.parse_expression_statement(),
+            TokenType::IF => self.parse_expression_statement(),
             _ => panic!("PANIC!"),
         };
 
@@ -386,6 +435,25 @@ impl Parser {
         });
     }
 
+    fn parse_block_statement(&mut self) -> Box<dyn Statement> {
+        let og_token = self.current_token.clone();
+        let mut statements = vec![];
+
+        self.next_token();
+
+        while !self.current_token_is(&TokenType::RBRACE) && !self.current_token_is(&TokenType::EOF)
+        {
+            let statement = self.parse_statement();
+            statements.push(statement);
+            self.next_token();
+        }
+
+        return Box::new(BlockStatement {
+            token: og_token,
+            statements,
+        });
+    }
+
     fn parse_expression(&mut self, precedence: PrecedenceType) -> Box<dyn Expression> {
         let token_type = self.current_token.token_type;
 
@@ -398,6 +466,7 @@ impl Parser {
             TokenType::TRUE => Some(self.parse_boolean_expression()),
             TokenType::FALSE => Some(self.parse_boolean_expression()),
             TokenType::LPAREN => Some(self.parse_grouped_expression()),
+            TokenType::IF => Some(self.parse_if_expression()),
             _ => None,
         };
 
@@ -492,6 +561,45 @@ impl Parser {
         }
 
         return expr;
+    }
+
+    fn parse_if_expression(&mut self) -> Box<dyn Expression> {
+        let og_token = self.current_token.clone();
+        if !self.expect_peek(&TokenType::LPAREN) {
+            panic!("INVALID!");
+        }
+
+        self.next_token();
+
+        let condition = self.parse_expression(PrecedenceType::LOWEST);
+
+        if !self.expect_peek(&TokenType::RPAREN) {
+            panic!("INVALID 2");
+        }
+
+        if !self.expect_peek(&TokenType::LBRACE) {
+            panic!("INVALID 3");
+        }
+
+        let consequence = self.parse_block_statement();
+
+        let alternative: Option<Box<dyn Statement>>;
+        if self.peek_token_is(&TokenType::ELSE) {
+            self.next_token();
+            if !self.expect_peek(&TokenType::LBRACE) {
+                panic!("INVALID!!!!");
+            }
+            alternative = Some(self.parse_block_statement());
+        } else {
+            alternative = None;
+        }
+
+        return Box::new(IfExpression {
+            token: og_token,
+            condition,
+            consequence,
+            alternative,
+        });
     }
 }
 
@@ -749,5 +857,102 @@ mod tests {
                 test_input.1
             );
         }
+    }
+
+    #[test]
+    fn test_if_statements() {
+        let test_input = "if (x < y) { x }";
+        let lexer = Lexer::new(test_input.to_string());
+        let mut parser = Parser::new(lexer);
+        let program = parser.parse();
+        assert_eq!(program.statements.len(), 1);
+
+        assert_eq!(
+            program.statements[0]
+                .downcast_ref::<ExpressionStatement>()
+                .unwrap()
+                .expression
+                .downcast_ref::<IfExpression>()
+                .unwrap()
+                .condition
+                .to_string(),
+            "(x < y)"
+        );
+
+        assert_eq!(
+            program.statements[0]
+                .downcast_ref::<ExpressionStatement>()
+                .unwrap()
+                .expression
+                .downcast_ref::<IfExpression>()
+                .unwrap()
+                .consequence
+                .to_string(),
+            "x"
+        );
+
+        assert!(program.statements[0]
+            .downcast_ref::<ExpressionStatement>()
+            .unwrap()
+            .expression
+            .downcast_ref::<IfExpression>()
+            .unwrap()
+            .alternative
+            .is_none());
+    }
+
+    #[test]
+    fn test_if_else_statement() {
+        let test_input = "if (x < y) { x } else { y + 5 }";
+        let lexer = Lexer::new(test_input.to_string());
+        let mut parser = Parser::new(lexer);
+        let program = parser.parse();
+        assert_eq!(program.statements.len(), 1);
+        assert_eq!(
+            program.statements[0]
+                .downcast_ref::<ExpressionStatement>()
+                .unwrap()
+                .expression
+                .downcast_ref::<IfExpression>()
+                .unwrap()
+                .condition
+                .to_string(),
+            "(x < y)"
+        );
+
+        assert_eq!(
+            program.statements[0]
+                .downcast_ref::<ExpressionStatement>()
+                .unwrap()
+                .expression
+                .downcast_ref::<IfExpression>()
+                .unwrap()
+                .consequence
+                .to_string(),
+            "x"
+        );
+
+        assert!(program.statements[0]
+            .downcast_ref::<ExpressionStatement>()
+            .unwrap()
+            .expression
+            .downcast_ref::<IfExpression>()
+            .unwrap()
+            .alternative
+            .is_some());
+
+        assert_eq!(
+            program.statements[0]
+                .downcast_ref::<ExpressionStatement>()
+                .unwrap()
+                .expression
+                .downcast_ref::<IfExpression>()
+                .unwrap()
+                .alternative
+                .as_ref()
+                .unwrap()
+                .to_string(),
+            "(y + 5)"
+        );
     }
 }
