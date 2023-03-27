@@ -45,6 +45,7 @@ impl Lexer {
                 if peeked.is_none() {
                     Some(Token::new(TokenType::ASSIGN, Some("=")))
                 } else if peeked.unwrap() == '=' {
+                    self.read_char();
                     Some(Token::new(TokenType::EQ, Some("==")))
                 } else {
                     Some(Token::new(TokenType::ASSIGN, Some("=")))
@@ -56,6 +57,7 @@ impl Lexer {
                 if peeked.is_none() {
                     Some(Token::new(TokenType::BANG, Some("!")))
                 } else if peeked.unwrap() == '=' {
+                    self.read_char();
                     Some(Token::new(TokenType::NEQ, Some("!=")))
                 } else {
                     Some(Token::new(TokenType::BANG, Some("!")))
@@ -136,6 +138,9 @@ impl Lexer {
 
     fn match_numeric_span(&mut self) -> Option<Token> {
         let mut numeric: Vec<char> = Vec::new();
+        if self.ch.is_none() {
+            return None;
+        }
         while self.ch.unwrap().is_numeric() {
             numeric.push(self.ch.unwrap());
             self.read_char();
@@ -400,19 +405,31 @@ mod tests {
     #[test]
     fn test_eq_neq_lexer() {
         let test_string = r#"
-            10 == 10;
-            10 != 9;
+            let x = 5;
+            10 == 15;
+            12 != 9;
             "#;
 
         let test_tokens = vec![
-            Token::new(TokenType::INT, Some("10")),
-            Token::new(TokenType::EQ, Some("==")),
-            Token::new(TokenType::INT, Some("10")),
+            Token::new(TokenType::LET, Some("let")),
+            Token::new(TokenType::IDENT, Some("x")),
+            Token::new(TokenType::ASSIGN, Some("=")),
+            Token::new(TokenType::INT, Some("5")),
             Token::new(TokenType::SEMICOLON, Some(";")),
             Token::new(TokenType::INT, Some("10")),
+            Token::new(TokenType::EQ, Some("==")),
+            Token::new(TokenType::INT, Some("15")),
+            Token::new(TokenType::SEMICOLON, Some(";")),
+            Token::new(TokenType::INT, Some("12")),
             Token::new(TokenType::NEQ, Some("!=")),
             Token::new(TokenType::INT, Some("9")),
             Token::new(TokenType::SEMICOLON, Some(";")),
         ];
+
+        let mut lexer = Lexer::new(test_string.to_string());
+        for test_token in test_tokens {
+            let token = lexer.next_token();
+            assert_eq!(token, test_token);
+        }
     }
 }

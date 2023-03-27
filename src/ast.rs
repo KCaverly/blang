@@ -1,8 +1,11 @@
 extern crate downcast_rs;
+extern crate lazy_static;
 
 use crate::lexer::Lexer;
 use crate::token::{Token, TokenType};
 use downcast_rs::{impl_downcast, Downcast};
+use lazy_static::lazy_static;
+use std::collections::HashMap;
 
 trait Node {
     fn token_literal(&self) -> Option<String>;
@@ -155,6 +158,55 @@ impl Expression for PrefixExpression {
     }
 }
 
+struct InfixExpression {
+    token: Token,
+    left: Box<dyn Expression>,
+    operator: String,
+    right: Box<dyn Expression>,
+}
+
+impl Expression for InfixExpression {
+    fn token_literal(&self) -> Option<String> {
+        return self.token.literal.to_owned();
+    }
+    fn to_string(&self) -> String {
+        return format!(
+            "({} {} {})",
+            self.left.to_string(),
+            self.operator,
+            self.right.to_string()
+        );
+    }
+}
+
+//////////////////
+// Precendences //
+//////////////////
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum PrecedenceType {
+    LOWEST = 0,
+    EQUALS = 1,
+    LESSGREATER = 2,
+    SUM = 3,
+    PRODUCT = 4,
+    PREFIX = 5,
+    CALL = 6,
+}
+
+lazy_static! {
+    static ref PRECEDENCE_MAP: HashMap<TokenType, PrecedenceType> = HashMap::from([
+        (TokenType::EQ, PrecedenceType::EQUALS),
+        (TokenType::NEQ, PrecedenceType::EQUALS),
+        (TokenType::LT, PrecedenceType::LESSGREATER),
+        (TokenType::GT, PrecedenceType::LESSGREATER),
+        (TokenType::PLUS, PrecedenceType::SUM),
+        (TokenType::MINUS, PrecedenceType::SUM),
+        (TokenType::SLASH, PrecedenceType::PRODUCT),
+        (TokenType::ASTERISK, PrecedenceType::PRODUCT)
+    ]);
+}
+
 ////////////
 // Parser //
 ////////////
@@ -216,6 +268,17 @@ impl Parser {
         }
     }
 
+    fn current_precedence(&mut self) -> &PrecedenceType {
+        return &PRECEDENCE_MAP[&self.current_token.clone().token_type.clone()];
+    }
+
+    fn peek_precedence(&mut self) -> PrecedenceType {
+        if PRECEDENCE_MAP.contains_key(&self.peek_token.clone().token_type) {
+            return PRECEDENCE_MAP[&self.peek_token.clone().token_type.clone()];
+        }
+        return PrecedenceType::LOWEST;
+    }
+
     pub fn parse(&mut self) -> Program {
         // Create Blank Program to Start
         let mut program = Program { statements: vec![] };
@@ -242,6 +305,7 @@ impl Parser {
             TokenType::INT => self.parse_expression_statement(),
             TokenType::BANG => self.parse_expression_statement(),
             TokenType::MINUS => self.parse_expression_statement(),
+            TokenType::PLUS => self.parse_expression_statement(),
             _ => panic!("PANIC!"),
         };
 
@@ -296,41 +360,52 @@ impl Parser {
             }),
         });
     }
-    // fn parse_integer_statement(&mut self) -> Box<dyn Statement> {
-    //     return Box::new(IntegerLiteralStatement {
-    //         token: self.current_token.clone(),
-    //         value: self
-    //             .current_token
-    //             .clone()
-    //             .literal
-    //             .unwrap()
-    //             .parse::<usize>()
-    //             .unwrap(),
-    //     });
-    // }
+
     fn parse_expression_statement(&mut self) -> Box<dyn Statement> {
-        let expr = self.parse_expression();
+        let expr = self.parse_expression(PrecedenceType::LOWEST);
         return Box::new(ExpressionStatement {
             token: self.current_token.clone(),
             expression: expr,
         });
     }
 
-    fn parse_expression(&mut self) -> Box<dyn Expression> {
+    fn parse_expression(&mut self, precedence: PrecedenceType) -> Box<dyn Expression> {
         let token_type = self.current_token.token_type;
-        println!("{:?}", token_type);
-        let expr = match token_type {
-            TokenType::INT => self.parse_integer_expression(),
-            TokenType::BANG => self.parse_prefix_expression(),
-            TokenType::MINUS => self.parse_prefix_expression(),
 
-            _ => panic!("PANICKING!"),
+        // Parse Left Side of Expression
+        let left_expr = match token_type {
+            TokenType::INT => Some(self.parse_integer_expression()),
+            TokenType::BANG => Some(self.parse_prefix_expression()),
+            TokenType::MINUS => Some(self.parse_prefix_expression()),
+            _ => None,
         };
-        return expr;
+
+        if left_expr.is_none() {
+            panic!("LEFT EXPR IS NONE!");
+        } else {
+            let mut expr = left_expr.unwrap();
+            while !self.peek_token_is(&TokenType::SEMICOLON) && precedence < self.peek_precedence()
+            {
+                self.next_token();
+                let next_token = self.current_token.clone().token_type;
+                expr = match next_token {
+                    TokenType::PLUS => self.parse_infix_expression(expr),
+                    TokenType::MINUS => self.parse_infix_expression(expr),
+                    TokenType::SLASH => self.parse_infix_expression(expr),
+                    TokenType::ASTERISK => self.parse_infix_expression(expr),
+                    TokenType::EQ => self.parse_infix_expression(expr),
+                    TokenType::NEQ => self.parse_infix_expression(expr),
+                    TokenType::GT => self.parse_infix_expression(expr),
+                    TokenType::LT => self.parse_infix_expression(expr),
+                    _ => panic!("PANICKING!"),
+                };
+            }
+            return expr;
+        }
     }
 
     fn parse_integer_expression(&mut self) -> Box<dyn Expression> {
-        return Box::new(IntegerLiteralExpression {
+        let expr = Box::new(IntegerLiteralExpression {
             token: self.current_token.clone(),
             value: self
                 .current_token
@@ -340,6 +415,8 @@ impl Parser {
                 .parse::<usize>()
                 .unwrap(),
         });
+        // self.next_token();
+        return expr;
     }
     fn parse_prefix_expression(&mut self) -> Box<dyn Expression> {
         let og_token = self.current_token.clone();
@@ -348,7 +425,20 @@ impl Parser {
         return Box::new(PrefixExpression {
             token: og_token.clone(),
             operator: og_token.literal.clone().unwrap(),
-            right: self.parse_expression(),
+            right: self.parse_expression(PrecedenceType::LOWEST),
+        });
+    }
+
+    fn parse_infix_expression(&mut self, left: Box<dyn Expression>) -> Box<dyn Expression> {
+        let og_token = self.current_token.clone();
+
+        let precedence = PRECEDENCE_MAP[&og_token.token_type];
+        self.next_token();
+        return Box::new(InfixExpression {
+            token: og_token.clone(),
+            left,
+            operator: og_token.clone().literal.unwrap(),
+            right: self.parse_expression(precedence),
         });
     }
 }
@@ -460,6 +550,63 @@ mod tests {
             let program = parser.parse();
 
             assert_eq!(program.statements.len(), 1);
+        }
+    }
+
+    #[test]
+    fn test_infix_statements() {
+        let test_inputs = vec![
+            ("5 + 5;", 5, "+", 5),
+            ("5 - 5;", 5, "-", 5),
+            ("5 * 5;", 5, "*", 5),
+            ("5 / 5;", 5, "/", 5),
+            ("5 > 5;", 5, ">", 5),
+            ("5 < 5;", 5, "<", 5),
+            ("5 == 5;", 5, "==", 5),
+            ("5 != 5;", 5, "!=", 5),
+        ];
+
+        for test_input in test_inputs {
+            let lexer = Lexer::new(test_input.0.to_string());
+            let mut parser = Parser::new(lexer);
+            let program = parser.parse();
+            assert_eq!(program.statements.len(), 1);
+
+            assert_eq!(
+                program.statements[0]
+                    .downcast_ref::<ExpressionStatement>()
+                    .unwrap()
+                    .expression
+                    .downcast_ref::<InfixExpression>()
+                    .unwrap()
+                    .left
+                    .token_literal()
+                    .unwrap(),
+                test_input.1.to_string()
+            );
+            assert_eq!(
+                program.statements[0]
+                    .downcast_ref::<ExpressionStatement>()
+                    .unwrap()
+                    .expression
+                    .downcast_ref::<InfixExpression>()
+                    .unwrap()
+                    .operator,
+                test_input.2
+            );
+
+            assert_eq!(
+                program.statements[0]
+                    .downcast_ref::<ExpressionStatement>()
+                    .unwrap()
+                    .expression
+                    .downcast_ref::<InfixExpression>()
+                    .unwrap()
+                    .right
+                    .token_literal()
+                    .unwrap(),
+                test_input.3.to_string()
+            );
         }
     }
 }
