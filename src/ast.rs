@@ -305,7 +305,7 @@ impl Parser {
             TokenType::INT => self.parse_expression_statement(),
             TokenType::BANG => self.parse_expression_statement(),
             TokenType::MINUS => self.parse_expression_statement(),
-            TokenType::PLUS => self.parse_expression_statement(),
+            TokenType::IDENT => self.parse_expression_statement(),
             _ => panic!("PANIC!"),
         };
 
@@ -377,6 +377,7 @@ impl Parser {
             TokenType::INT => Some(self.parse_integer_expression()),
             TokenType::BANG => Some(self.parse_prefix_expression()),
             TokenType::MINUS => Some(self.parse_prefix_expression()),
+            TokenType::IDENT => Some(self.parse_identifier_expression()),
             _ => None,
         };
 
@@ -415,7 +416,13 @@ impl Parser {
                 .parse::<usize>()
                 .unwrap(),
         });
-        // self.next_token();
+        return expr;
+    }
+    fn parse_identifier_expression(&mut self) -> Box<dyn Expression> {
+        let expr = Box::new(IdentifierExpression {
+            token: self.current_token.clone(),
+            value: self.current_token.clone().literal.unwrap(),
+        });
         return expr;
     }
     fn parse_prefix_expression(&mut self) -> Box<dyn Expression> {
@@ -425,10 +432,9 @@ impl Parser {
         return Box::new(PrefixExpression {
             token: og_token.clone(),
             operator: og_token.literal.clone().unwrap(),
-            right: self.parse_expression(PrecedenceType::LOWEST),
+            right: self.parse_expression(PrecedenceType::PREFIX),
         });
     }
-
     fn parse_infix_expression(&mut self, left: Box<dyn Expression>) -> Box<dyn Expression> {
         let og_token = self.current_token.clone();
 
@@ -554,7 +560,7 @@ mod tests {
     }
 
     #[test]
-    fn test_infix_statements() {
+    fn test_simple_infix_statements() {
         let test_inputs = vec![
             ("5 + 5;", 5, "+", 5),
             ("5 - 5;", 5, "-", 5),
@@ -606,6 +612,45 @@ mod tests {
                     .token_literal()
                     .unwrap(),
                 test_input.3.to_string()
+            );
+        }
+    }
+
+    #[test]
+    fn test_complex_infix_statements() {
+        let test_inputs = vec![
+            ("-a + b;", "((-a) + b)"),
+            ("!-a;", "(!(-a))"),
+            ("a + b + c;", "((a + b) + c)"),
+            ("a + b - c;", "((a + b) - c)"),
+            ("a * b * c;", "((a * b) * c)"),
+            ("a + b / c;", "(a + (b / c))"),
+            ("a + b * c + d / e - f;", "(((a + (b * c)) + (d / e)) - f)"),
+            ("3 + 4; -5 * 5", "(3 + 4)((-5 * 5)"),
+            ("5 > 4 == 3 < 4", "((5 > 4) == (3 < 4))"),
+            ("5 < 4 != 3 > 4", "((5 < 4) != (3 > 4))"),
+            (
+                "3 + 4 * 5 == 3 * 1 + 4 * 5",
+                "((3 + (4 * 5)) == ((3 * 1) + (4 * 5)))",
+            ),
+            (
+                "3 + 4 * 5 == 3 * 1 + 4 * 5",
+                "((3 + (4 * 5)) == ((3 * 1) + (4 * 5)))",
+            ),
+        ];
+
+        for test_input in test_inputs {
+            let lexer = Lexer::new(test_input.0.to_string());
+            let mut parser = Parser::new(lexer);
+            let program = parser.parse();
+            assert_eq!(program.statements.len(), 1);
+
+            assert_eq!(
+                program.statements[0]
+                    .downcast_ref::<ExpressionStatement>()
+                    .unwrap()
+                    .to_string(),
+                test_input.1
             );
         }
     }

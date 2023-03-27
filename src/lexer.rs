@@ -108,6 +108,9 @@ impl Lexer {
 
     fn match_alphabetic_span(&mut self) -> Option<Token> {
         let mut ident: Vec<char> = Vec::new();
+        if self.ch.is_none() {
+            return None;
+        }
         while self.ch.unwrap().is_alphabetic() & !self.ch.unwrap().is_whitespace() {
             ident.push(self.ch.unwrap());
             self.read_char();
