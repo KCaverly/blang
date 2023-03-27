@@ -143,6 +143,20 @@ impl Expression for IntegerLiteralExpression {
     }
 }
 
+struct BooleanExpression {
+    token: Token,
+    value: bool,
+}
+
+impl Expression for BooleanExpression {
+    fn token_literal(&self) -> Option<String> {
+        return self.token.literal.to_owned();
+    }
+    fn to_string(&self) -> String {
+        return self.value.to_string();
+    }
+}
+
 struct PrefixExpression {
     token: Token,
     operator: String,
@@ -306,6 +320,8 @@ impl Parser {
             TokenType::BANG => self.parse_expression_statement(),
             TokenType::MINUS => self.parse_expression_statement(),
             TokenType::IDENT => self.parse_expression_statement(),
+            TokenType::TRUE => self.parse_expression_statement(),
+            TokenType::FALSE => self.parse_expression_statement(),
             _ => panic!("PANIC!"),
         };
 
@@ -378,6 +394,8 @@ impl Parser {
             TokenType::BANG => Some(self.parse_prefix_expression()),
             TokenType::MINUS => Some(self.parse_prefix_expression()),
             TokenType::IDENT => Some(self.parse_identifier_expression()),
+            TokenType::TRUE => Some(self.parse_boolean_expression()),
+            TokenType::FALSE => Some(self.parse_boolean_expression()),
             _ => None,
         };
 
@@ -425,6 +443,21 @@ impl Parser {
         });
         return expr;
     }
+
+    fn parse_boolean_expression(&mut self) -> Box<dyn Expression> {
+        let expr = Box::new(BooleanExpression {
+            token: self.current_token.clone(),
+            value: self
+                .current_token
+                .clone()
+                .literal
+                .unwrap()
+                .parse::<bool>()
+                .unwrap(),
+        });
+        return expr;
+    }
+
     fn parse_prefix_expression(&mut self) -> Box<dyn Expression> {
         let og_token = self.current_token.clone();
         self.next_token();
@@ -626,17 +659,41 @@ mod tests {
             ("a * b * c;", "((a * b) * c)"),
             ("a + b / c;", "(a + (b / c))"),
             ("a + b * c + d / e - f;", "(((a + (b * c)) + (d / e)) - f)"),
-            ("3 + 4; -5 * 5", "(3 + 4)((-5 * 5)"),
-            ("5 > 4 == 3 < 4", "((5 > 4) == (3 < 4))"),
-            ("5 < 4 != 3 > 4", "((5 < 4) != (3 > 4))"),
+            ("5 > 4 == 3 < 4;", "((5 > 4) == (3 < 4))"),
+            ("5 < 4 != 3 > 4;", "((5 < 4) != (3 > 4))"),
             (
-                "3 + 4 * 5 == 3 * 1 + 4 * 5",
+                "3 + 4 * 5 == 3 * 1 + 4 * 5;",
                 "((3 + (4 * 5)) == ((3 * 1) + (4 * 5)))",
             ),
             (
-                "3 + 4 * 5 == 3 * 1 + 4 * 5",
+                "3 + 4 * 5 == 3 * 1 + 4 * 5;",
                 "((3 + (4 * 5)) == ((3 * 1) + (4 * 5)))",
             ),
+        ];
+
+        for test_input in test_inputs {
+            let lexer = Lexer::new(test_input.0.to_string());
+            let mut parser = Parser::new(lexer);
+            let program = parser.parse();
+            assert_eq!(program.statements.len(), 1);
+
+            assert_eq!(
+                program.statements[0]
+                    .downcast_ref::<ExpressionStatement>()
+                    .unwrap()
+                    .to_string(),
+                test_input.1
+            );
+        }
+    }
+
+    #[test]
+    fn test_boolean_statements() {
+        let test_inputs = vec![
+            ("true;", "true"),
+            ("false;", "false"),
+            ("3 > 5 == false;", "((3 > 5) == false)"),
+            ("3 < 5 == true;", "((3 < 5) == true)"),
         ];
 
         for test_input in test_inputs {
