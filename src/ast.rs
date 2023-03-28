@@ -241,6 +241,56 @@ impl Expression for IfExpression {
     }
 }
 
+struct FunctionLiteralExpression {
+    token: Token,
+    parameters: Vec<IdentifierExpression>,
+    body: Box<dyn Statement>,
+}
+
+impl Expression for FunctionLiteralExpression {
+    fn token_literal(&self) -> Option<String> {
+        return self.token.literal.clone();
+    }
+    fn to_string(&self) -> String {
+        // et s = it
+        //     .map(|&x| x)
+        //     .collect::<Vec<&str>>()
+        //     .join("\n");
+        return format!(
+            "fn ({}) {}",
+            self.parameters
+                .iter()
+                .map(|x| x.to_string())
+                .collect::<Vec<String>>()
+                .join(","),
+            self.body.to_string()
+        );
+    }
+}
+
+struct CallExpression {
+    token: Token,
+    function: Box<dyn Expression>,
+    arguments: Vec<Box<dyn Expression>>,
+}
+
+impl Expression for CallExpression {
+    fn token_literal(&self) -> Option<String> {
+        return self.token.literal.clone();
+    }
+    fn to_string(&self) -> String {
+        return format!(
+            "{}({})",
+            self.function.to_string(),
+            self.arguments
+                .iter()
+                .map(|x| x.to_string())
+                .collect::<Vec<String>>()
+                .join(",")
+        );
+    }
+}
+
 //////////////////
 // Precendences //
 //////////////////
@@ -265,7 +315,8 @@ lazy_static! {
         (TokenType::PLUS, PrecedenceType::SUM),
         (TokenType::MINUS, PrecedenceType::SUM),
         (TokenType::SLASH, PrecedenceType::PRODUCT),
-        (TokenType::ASTERISK, PrecedenceType::PRODUCT)
+        (TokenType::ASTERISK, PrecedenceType::PRODUCT),
+        (TokenType::LPAREN, PrecedenceType::CALL)
     ]);
 }
 
@@ -372,6 +423,7 @@ impl Parser {
             TokenType::FALSE => self.parse_expression_statement(),
             TokenType::LPAREN => self.parse_expression_statement(),
             TokenType::IF => self.parse_expression_statement(),
+            TokenType::FUNCTION => self.parse_expression_statement(),
             _ => panic!("PANIC!"),
         };
 
@@ -462,11 +514,13 @@ impl Parser {
             TokenType::INT => Some(self.parse_integer_expression()),
             TokenType::BANG => Some(self.parse_prefix_expression()),
             TokenType::MINUS => Some(self.parse_prefix_expression()),
+            TokenType::FUNCTION => Some(self.parse_function_expression()),
             TokenType::IDENT => Some(self.parse_identifier_expression()),
             TokenType::TRUE => Some(self.parse_boolean_expression()),
             TokenType::FALSE => Some(self.parse_boolean_expression()),
             TokenType::LPAREN => Some(self.parse_grouped_expression()),
             TokenType::IF => Some(self.parse_if_expression()),
+
             _ => None,
         };
 
@@ -479,6 +533,7 @@ impl Parser {
                 self.next_token();
                 let next_token = self.current_token.clone().token_type;
                 expr = match next_token {
+                    TokenType::IDENT => self.parse_identifier_expression(),
                     TokenType::PLUS => self.parse_infix_expression(expr),
                     TokenType::MINUS => self.parse_infix_expression(expr),
                     TokenType::SLASH => self.parse_infix_expression(expr),
@@ -487,6 +542,7 @@ impl Parser {
                     TokenType::NEQ => self.parse_infix_expression(expr),
                     TokenType::GT => self.parse_infix_expression(expr),
                     TokenType::LT => self.parse_infix_expression(expr),
+                    TokenType::LPAREN => self.parse_call_expression(expr),
                     _ => panic!("PANICKING!"),
                 };
             }
@@ -600,6 +656,95 @@ impl Parser {
             consequence,
             alternative,
         });
+    }
+
+    fn parse_function_expression(&mut self) -> Box<dyn Expression> {
+        let og_token = self.current_token.clone();
+
+        if !self.expect_peek(&TokenType::LPAREN) {
+            panic!("INVALID FUNCTION!");
+        }
+
+        let params = self.parse_function_parameters();
+
+        if !self.expect_peek(&TokenType::LBRACE) {
+            panic!("INVALID FUNCTION!");
+        }
+
+        let body = self.parse_block_statement();
+
+        return Box::new(FunctionLiteralExpression {
+            token: og_token,
+            parameters: params,
+            body,
+        });
+    }
+
+    fn parse_function_parameters(&mut self) -> Vec<IdentifierExpression> {
+        let mut identifiers = vec![];
+        if self.peek_token_is(&TokenType::RPAREN) {
+            self.next_token();
+            return identifiers;
+        }
+
+        self.next_token();
+
+        let ident = IdentifierExpression {
+            token: self.current_token.clone(),
+            value: self.current_token.literal.clone().unwrap(),
+        };
+
+        identifiers.push(ident);
+
+        while self.peek_token_is(&TokenType::COMMA) {
+            self.next_token();
+            self.next_token();
+            identifiers.push(IdentifierExpression {
+                token: self.current_token.clone(),
+                value: self.current_token.literal.clone().unwrap(),
+            });
+        }
+
+        if !self.expect_peek(&TokenType::RPAREN) {
+            panic!("INVALID Function");
+        }
+
+        return identifiers;
+    }
+
+    fn parse_call_expression(&mut self, func: Box<dyn Expression>) -> Box<dyn Expression> {
+        let og_token = self.current_token.clone();
+        let arguments = self.parse_call_arguments();
+
+        return Box::new(CallExpression {
+            token: og_token,
+            function: func,
+            arguments,
+        });
+    }
+
+    fn parse_call_arguments(&mut self) -> Vec<Box<dyn Expression>> {
+        let mut args = vec![];
+
+        if self.peek_token_is(&TokenType::RPAREN) {
+            self.next_token();
+            return args;
+        }
+
+        self.next_token();
+        args.push(self.parse_expression(PrecedenceType::LOWEST));
+
+        while self.peek_token_is(&TokenType::COMMA) {
+            self.next_token();
+            self.next_token();
+            args.push(self.parse_expression(PrecedenceType::LOWEST));
+        }
+
+        if !self.expect_peek(&TokenType::RPAREN) {
+            panic!("INVALID CALL ARGUMENT");
+        }
+
+        return args;
     }
 }
 
@@ -954,5 +1099,23 @@ mod tests {
                 .to_string(),
             "(y + 5)"
         );
+    }
+
+    #[test]
+    fn test_function_literal() {
+        let test_input = "fn(x, y) { x + y }";
+        let lexer = Lexer::new(test_input.to_string());
+        let mut parser = Parser::new(lexer);
+        let program = parser.parse();
+        assert_eq!(program.statements.len(), 1);
+    }
+
+    #[test]
+    fn test_call_expression() {
+        let test_input = "add(1, 2 * 3, 4 + 5)";
+        let lexer = Lexer::new(test_input.to_string());
+        let mut parser = Parser::new(lexer);
+        let program = parser.parse();
+        assert_eq!(program.statements.len(), 1);
     }
 }
