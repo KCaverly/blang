@@ -12,7 +12,7 @@ trait Node {
     fn to_string(&self) -> String;
 }
 
-trait Statement: Downcast {
+pub trait Statement: Downcast {
     fn token_literal(&self) -> Option<String>;
     fn to_string(&self) -> String;
 }
@@ -30,8 +30,8 @@ impl_downcast!(Expression);
 // Program //
 /////////////
 
-struct Program {
-    statements: Vec<Box<dyn Statement>>,
+pub struct Program {
+    pub statements: Vec<Box<dyn Statement>>,
 }
 
 impl Node for Program {
@@ -320,7 +320,7 @@ lazy_static! {
 // Parser //
 ////////////
 
-struct Parser {
+pub struct Parser {
     lexer: Lexer,
     current_token: Token,
     peek_token: Token,
