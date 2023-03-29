@@ -7,14 +7,16 @@ use downcast_rs::{impl_downcast, Downcast};
 use lazy_static::lazy_static;
 use std::collections::HashMap;
 
-trait Node {
+pub trait Node {
     fn token_literal(&self) -> Option<String>;
     fn to_string(&self) -> String;
+    fn struct_name(&self) -> String;
 }
 
 pub trait Statement: Downcast {
     fn token_literal(&self) -> Option<String>;
     fn to_string(&self) -> String;
+    fn struct_name(&self) -> String;
 }
 
 impl_downcast!(Statement);
@@ -22,6 +24,7 @@ impl_downcast!(Statement);
 trait Expression: Downcast {
     fn token_literal(&self) -> Option<String>;
     fn to_string(&self) -> String;
+    fn struct_name(&self) -> String;
 }
 
 impl_downcast!(Expression);
@@ -34,7 +37,7 @@ pub struct Program {
     pub statements: Vec<Box<dyn Statement>>,
 }
 
-impl Node for Program {
+impl Statement for Program {
     fn token_literal(&self) -> Option<String> {
         if self.statements.len() > 0 {
             return self.statements[0].token_literal();
@@ -49,6 +52,10 @@ impl Node for Program {
             str.push(statement.to_string());
         }
         return str.join(" ");
+    }
+
+    fn struct_name(&self) -> String {
+        return "Program".to_string();
     }
 }
 
@@ -76,6 +83,10 @@ impl Statement for LetStatement {
         )
         .to_string();
     }
+
+    fn struct_name(&self) -> String {
+        return "LetStatement".to_string();
+    }
 }
 
 struct ReturnStatement {
@@ -95,6 +106,10 @@ impl Statement for ReturnStatement {
             self.value.to_string()
         );
     }
+
+    fn struct_name(&self) -> String {
+        return "ReturnStatement".to_string();
+    }
 }
 
 struct ExpressionStatement {
@@ -108,6 +123,9 @@ impl Statement for ExpressionStatement {
     }
     fn to_string(&self) -> String {
         return self.expression.to_string();
+    }
+    fn struct_name(&self) -> String {
+        return "ExpressionStatement".to_string();
     }
 }
 
@@ -127,6 +145,9 @@ impl Statement for BlockStatement {
         }
         return str.join(" ");
     }
+    fn struct_name(&self) -> String {
+        return "BlockStatement".to_string();
+    }
 }
 
 ////////////////
@@ -145,6 +166,9 @@ impl Expression for IdentifierExpression {
     fn to_string(&self) -> String {
         return self.value.clone();
     }
+    fn struct_name(&self) -> String {
+        return "IdentifierExpression".to_string();
+    }
 }
 
 struct IntegerLiteralExpression {
@@ -158,6 +182,9 @@ impl Expression for IntegerLiteralExpression {
     }
     fn to_string(&self) -> String {
         return self.value.clone().to_string();
+    }
+    fn struct_name(&self) -> String {
+        return "IntegerLiteralExpression".to_string();
     }
 }
 
@@ -173,6 +200,9 @@ impl Expression for BooleanExpression {
     fn to_string(&self) -> String {
         return self.value.to_string();
     }
+    fn struct_name(&self) -> String {
+        return "BooleanExpression".to_string();
+    }
 }
 
 struct PrefixExpression {
@@ -187,6 +217,9 @@ impl Expression for PrefixExpression {
     }
     fn to_string(&self) -> String {
         return format!("({}{})", self.operator, self.right.to_string());
+    }
+    fn struct_name(&self) -> String {
+        return "PrefixExpression".to_string();
     }
 }
 
@@ -208,6 +241,10 @@ impl Expression for InfixExpression {
             self.operator,
             self.right.to_string()
         );
+    }
+
+    fn struct_name(&self) -> String {
+        return "InfixExpression".to_string();
     }
 }
 
@@ -239,6 +276,9 @@ impl Expression for IfExpression {
             );
         }
     }
+    fn struct_name(&self) -> String {
+        return "IfExpression".to_string();
+    }
 }
 
 struct FunctionLiteralExpression {
@@ -262,6 +302,9 @@ impl Expression for FunctionLiteralExpression {
             self.body.to_string()
         );
     }
+    fn struct_name(&self) -> String {
+        return "FunctionLiteralExpression".to_string();
+    }
 }
 
 struct CallExpression {
@@ -284,6 +327,9 @@ impl Expression for CallExpression {
                 .collect::<Vec<String>>()
                 .join(", ")
         );
+    }
+    fn struct_name(&self) -> String {
+        return "CallExpression".to_string();
     }
 }
 
