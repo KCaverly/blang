@@ -90,7 +90,7 @@ impl Statement for ReturnStatement {
 
     fn to_string(&self) -> String {
         return format!(
-            "{} {}",
+            "{} {};",
             self.token_literal().unwrap(),
             self.value.to_string()
         );
@@ -123,7 +123,7 @@ impl Statement for BlockStatement {
     fn to_string(&self) -> String {
         let mut str: Vec<String> = Vec::new();
         for statement in &self.statements {
-            str.push(statement.to_string());
+            str.push(format!("{};", statement.to_string()));
         }
         return str.join(" ");
     }
@@ -252,17 +252,13 @@ impl Expression for FunctionLiteralExpression {
         return self.token.literal.clone();
     }
     fn to_string(&self) -> String {
-        // et s = it
-        //     .map(|&x| x)
-        //     .collect::<Vec<&str>>()
-        //     .join("\n");
         return format!(
-            "fn ({}) {}",
+            "fn({}) {{ {} }}",
             self.parameters
                 .iter()
                 .map(|x| x.to_string())
                 .collect::<Vec<String>>()
-                .join(","),
+                .join(", "),
             self.body.to_string()
         );
     }
@@ -286,7 +282,7 @@ impl Expression for CallExpression {
                 .iter()
                 .map(|x| x.to_string())
                 .collect::<Vec<String>>()
-                .join(",")
+                .join(", ")
         );
     }
 }
@@ -398,11 +394,11 @@ impl Parser {
 
         // Iterate through all token in the Lexer
         // TODO: We have to handle semicolons at some point
-        while !self.current_token_is(&TokenType::EOF)
-            & !self.current_token_is(&TokenType::SEMICOLON)
-        {
-            let statement = self.parse_statement();
-            program.statements.push(statement);
+        while !self.current_token_is(&TokenType::EOF) {
+            if !self.current_token_is(&TokenType::SEMICOLON) {
+                let statement = self.parse_statement();
+                program.statements.push(statement);
+            }
 
             self.next_token();
         }
@@ -444,21 +440,14 @@ impl Parser {
 
         if !self.expect_peek(&TokenType::ASSIGN) {
             panic!("Identifier structured incorrectly");
-        }
-
-        while !self.current_token_is(&TokenType::SEMICOLON) {
+        } else {
             self.next_token();
         }
 
-        // TODO: For now this value returned is a dummy identifier.
-        // TODO: This will have to be updated at some future point
         return Box::new(LetStatement {
             token: og_token,
             name,
-            value: Box::new(IdentifierExpression {
-                token: self.peek_token.clone(),
-                value: "".to_string(),
-            }),
+            value: self.parse_expression(PrecedenceType::LOWEST),
         });
     }
     fn parse_return_statement(&mut self) -> Box<dyn Statement> {
@@ -495,8 +484,10 @@ impl Parser {
 
         while !self.current_token_is(&TokenType::RBRACE) && !self.current_token_is(&TokenType::EOF)
         {
-            let statement = self.parse_statement();
-            statements.push(statement);
+            if !self.current_token_is(&TokenType::SEMICOLON) {
+                let statement = self.parse_statement();
+                statements.push(statement);
+            }
             self.next_token();
         }
 
@@ -824,14 +815,14 @@ mod tests {
 
     #[test]
     fn test_integer_literal_statements() {
-        let test_input = "5;";
+        let test_input = "5; 6;";
 
         let lexer = Lexer::new(test_input.to_string());
         let mut parser = Parser::new(lexer);
 
         let program = parser.parse();
 
-        assert_eq!(program.statements.len(), 1);
+        assert_eq!(program.statements.len(), 2);
         assert_eq!(program.statements[0].token_literal().unwrap(), "5");
         assert_eq!(
             program.statements[0]
@@ -956,9 +947,9 @@ mod tests {
     #[test]
     fn test_boolean_statements() {
         let test_inputs = vec![
-            ("true;", "true"),
+            ("true", "true"),
             ("false;", "false"),
-            ("3 > 5 == false;", "((3 > 5) == false)"),
+            ("3 > 5 == false", "((3 > 5) == false)"),
             ("3 < 5 == true;", "((3 < 5) == true)"),
         ];
 
@@ -981,7 +972,7 @@ mod tests {
     #[test]
     fn test_grouped_statements() {
         let test_inputs = vec![
-            ("1 + (2 + 3) + 4;", "((1 + (2 + 3)) + 4)"),
+            ("1 + (2 + 3) + 4", "((1 + (2 + 3)) + 4)"),
             ("(5 + 5) * 2;", "((5 + 5) * 2)"),
             ("2 / (5 + 5)", "(2 / (5 + 5))"),
             ("-(5 + 5)", "(-(5 + 5))"),
@@ -1006,116 +997,185 @@ mod tests {
 
     #[test]
     fn test_if_statements() {
-        let test_input = "if (x < y) { x }";
-        let lexer = Lexer::new(test_input.to_string());
-        let mut parser = Parser::new(lexer);
-        let program = parser.parse();
-        assert_eq!(program.statements.len(), 1);
+        let test_inputs = vec![("if (x < y) { x; }", "(x < y)", "x;")];
+        for test_input in test_inputs {
+            let lexer = Lexer::new(test_input.0.to_string());
+            let mut parser = Parser::new(lexer);
+            let program = parser.parse();
+            assert_eq!(program.statements.len(), 1);
 
-        assert_eq!(
-            program.statements[0]
-                .downcast_ref::<ExpressionStatement>()
-                .unwrap()
-                .expression
-                .downcast_ref::<IfExpression>()
-                .unwrap()
-                .condition
-                .to_string(),
-            "(x < y)"
-        );
+            assert_eq!(
+                program.statements[0]
+                    .downcast_ref::<ExpressionStatement>()
+                    .unwrap()
+                    .expression
+                    .downcast_ref::<IfExpression>()
+                    .unwrap()
+                    .condition
+                    .to_string(),
+                test_input.1
+            );
+            assert_eq!(
+                program.statements[0]
+                    .downcast_ref::<ExpressionStatement>()
+                    .unwrap()
+                    .expression
+                    .downcast_ref::<IfExpression>()
+                    .unwrap()
+                    .consequence
+                    .to_string(),
+                test_input.2
+            );
 
-        assert_eq!(
-            program.statements[0]
-                .downcast_ref::<ExpressionStatement>()
-                .unwrap()
-                .expression
-                .downcast_ref::<IfExpression>()
-                .unwrap()
-                .consequence
-                .to_string(),
-            "x"
-        );
-
-        assert!(program.statements[0]
-            .downcast_ref::<ExpressionStatement>()
-            .unwrap()
-            .expression
-            .downcast_ref::<IfExpression>()
-            .unwrap()
-            .alternative
-            .is_none());
-    }
-
-    #[test]
-    fn test_if_else_statement() {
-        let test_input = "if (x < y) { x } else { y + 5 }";
-        let lexer = Lexer::new(test_input.to_string());
-        let mut parser = Parser::new(lexer);
-        let program = parser.parse();
-        assert_eq!(program.statements.len(), 1);
-        assert_eq!(
-            program.statements[0]
-                .downcast_ref::<ExpressionStatement>()
-                .unwrap()
-                .expression
-                .downcast_ref::<IfExpression>()
-                .unwrap()
-                .condition
-                .to_string(),
-            "(x < y)"
-        );
-
-        assert_eq!(
-            program.statements[0]
-                .downcast_ref::<ExpressionStatement>()
-                .unwrap()
-                .expression
-                .downcast_ref::<IfExpression>()
-                .unwrap()
-                .consequence
-                .to_string(),
-            "x"
-        );
-
-        assert!(program.statements[0]
-            .downcast_ref::<ExpressionStatement>()
-            .unwrap()
-            .expression
-            .downcast_ref::<IfExpression>()
-            .unwrap()
-            .alternative
-            .is_some());
-
-        assert_eq!(
-            program.statements[0]
+            assert!(program.statements[0]
                 .downcast_ref::<ExpressionStatement>()
                 .unwrap()
                 .expression
                 .downcast_ref::<IfExpression>()
                 .unwrap()
                 .alternative
-                .as_ref()
+                .is_none());
+        }
+    }
+
+    #[test]
+    fn test_if_else_statement() {
+        let test_inputs = vec![(
+            "if (x < y) { x; } else { y + 5; }",
+            "(x < y)",
+            "x;",
+            "(y + 5);",
+        )];
+        for test_input in test_inputs {
+            let lexer = Lexer::new(test_input.0.to_string());
+            let mut parser = Parser::new(lexer);
+            let program = parser.parse();
+            assert_eq!(program.statements.len(), 1);
+            assert_eq!(
+                program.statements[0]
+                    .downcast_ref::<ExpressionStatement>()
+                    .unwrap()
+                    .expression
+                    .downcast_ref::<IfExpression>()
+                    .unwrap()
+                    .condition
+                    .to_string(),
+                test_input.1
+            );
+
+            assert_eq!(
+                program.statements[0]
+                    .downcast_ref::<ExpressionStatement>()
+                    .unwrap()
+                    .expression
+                    .downcast_ref::<IfExpression>()
+                    .unwrap()
+                    .consequence
+                    .to_string(),
+                test_input.2
+            );
+
+            assert!(program.statements[0]
+                .downcast_ref::<ExpressionStatement>()
                 .unwrap()
-                .to_string(),
-            "(y + 5)"
-        );
+                .expression
+                .downcast_ref::<IfExpression>()
+                .unwrap()
+                .alternative
+                .is_some());
+
+            assert_eq!(
+                program.statements[0]
+                    .downcast_ref::<ExpressionStatement>()
+                    .unwrap()
+                    .expression
+                    .downcast_ref::<IfExpression>()
+                    .unwrap()
+                    .alternative
+                    .as_ref()
+                    .unwrap()
+                    .to_string(),
+                test_input.3
+            );
+        }
     }
 
     #[test]
     fn test_function_literal() {
-        let test_input = "fn(x, y) { x + y }";
-        let lexer = Lexer::new(test_input.to_string());
-        let mut parser = Parser::new(lexer);
-        let program = parser.parse();
-        assert_eq!(program.statements.len(), 1);
+        let test_inputs = vec![
+            ("fn(x, y) { x + y; }", "fn(x, y) { (x + y); }", 1, 2, 1),
+            (
+                "fn() { let a = 3; a + 4; }",
+                "fn() { let a = 3; (a + 4); }",
+                1,
+                0,
+                2,
+            ),
+        ];
+        for test_input in test_inputs {
+            let lexer = Lexer::new(test_input.0.to_string());
+            let mut parser = Parser::new(lexer);
+            let program = parser.parse();
+            assert_eq!(program.statements.len(), test_input.2);
+            assert_eq!(program.statements[0].to_string(), test_input.1);
+            assert_eq!(
+                program.statements[0]
+                    .downcast_ref::<ExpressionStatement>()
+                    .unwrap()
+                    .expression
+                    .downcast_ref::<FunctionLiteralExpression>()
+                    .unwrap()
+                    .parameters
+                    .len(),
+                test_input.3
+            );
+
+            assert_eq!(
+                program.statements[0]
+                    .downcast_ref::<ExpressionStatement>()
+                    .unwrap()
+                    .expression
+                    .downcast_ref::<FunctionLiteralExpression>()
+                    .unwrap()
+                    .body
+                    .downcast_ref::<BlockStatement>()
+                    .unwrap()
+                    .statements
+                    .len(),
+                test_input.4
+            );
+        }
     }
 
     #[test]
     fn test_call_expression() {
-        let test_input = "add(1, 2 * 3, 4 + 5)";
-        let lexer = Lexer::new(test_input.to_string());
-        let mut parser = Parser::new(lexer);
-        let program = parser.parse();
-        assert_eq!(program.statements.len(), 1);
+        let test_inputs = vec![
+            ("add(1, 2, 3)", "add(1, 2, 3)", 1, 3),
+            (
+                "product(1,2*3, 4+5); run()",
+                "product(1, (2 * 3), (4 + 5))",
+                2,
+                3,
+            ),
+            ("run()", "run()", 1, 0),
+        ];
+        for test_input in test_inputs {
+            let lexer = Lexer::new(test_input.0.to_string());
+            let mut parser = Parser::new(lexer);
+            let program = parser.parse();
+            assert_eq!(program.statements.len(), test_input.2);
+            assert_eq!(program.statements[0].to_string(), test_input.1);
+            assert_eq!(
+                program.statements[0]
+                    .downcast_ref::<ExpressionStatement>()
+                    .unwrap()
+                    .expression
+                    .downcast_ref::<CallExpression>()
+                    .unwrap()
+                    .arguments
+                    .len(),
+                test_input.3
+            );
+        }
     }
 }

@@ -114,6 +114,10 @@ impl Lexer {
         while self.ch.unwrap().is_alphabetic() & !self.ch.unwrap().is_whitespace() {
             ident.push(self.ch.unwrap());
             self.read_char();
+
+            if self.ch.is_none() {
+                break;
+            }
         }
 
         let ident_string: String = ident.iter().collect();
@@ -147,6 +151,10 @@ impl Lexer {
         while self.ch.unwrap().is_numeric() {
             numeric.push(self.ch.unwrap());
             self.read_char();
+
+            if self.ch.is_none() {
+                break;
+            }
         }
 
         let numeric_string: String = numeric.iter().collect();
