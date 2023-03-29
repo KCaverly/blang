@@ -454,11 +454,6 @@ impl Parser {
         let og_token = self.current_token.clone();
         self.next_token();
 
-        // TODO: Again this is not correctly parsing the value
-        while !self.current_token_is(&TokenType::SEMICOLON) {
-            self.next_token();
-        }
-
         return Box::new(ReturnStatement {
             token: og_token,
             value: Box::new(IdentifierExpression {
