@@ -7,37 +7,22 @@ use downcast_rs::{impl_downcast, Downcast};
 use lazy_static::lazy_static;
 use std::collections::HashMap;
 
-pub trait Node {
+pub trait Node: Downcast {
     fn token_literal(&self) -> Option<String>;
     fn to_string(&self) -> String;
-    fn struct_name(&self) -> String;
 }
 
-pub trait Statement: Downcast {
-    fn token_literal(&self) -> Option<String>;
-    fn to_string(&self) -> String;
-    fn struct_name(&self) -> String;
-}
-
-impl_downcast!(Statement);
-
-trait Expression: Downcast {
-    fn token_literal(&self) -> Option<String>;
-    fn to_string(&self) -> String;
-    fn struct_name(&self) -> String;
-}
-
-impl_downcast!(Expression);
+impl_downcast!(Node);
 
 /////////////
 // Program //
 /////////////
 
 pub struct Program {
-    pub statements: Vec<Box<dyn Statement>>,
+    pub statements: Vec<Box<dyn Node>>,
 }
 
-impl Statement for Program {
+impl Node for Program {
     fn token_literal(&self) -> Option<String> {
         if self.statements.len() > 0 {
             return self.statements[0].token_literal();
@@ -53,10 +38,6 @@ impl Statement for Program {
         }
         return str.join(" ");
     }
-
-    fn struct_name(&self) -> String {
-        return "Program".to_string();
-    }
 }
 
 ///////////////
@@ -66,10 +47,10 @@ impl Statement for Program {
 struct LetStatement {
     token: Token,
     name: IdentifierExpression,
-    value: Box<dyn Expression>,
+    value: Box<dyn Node>,
 }
 
-impl Statement for LetStatement {
+impl Node for LetStatement {
     fn token_literal(&self) -> Option<String> {
         return self.token.literal.to_owned();
     }
@@ -83,18 +64,14 @@ impl Statement for LetStatement {
         )
         .to_string();
     }
-
-    fn struct_name(&self) -> String {
-        return "LetStatement".to_string();
-    }
 }
 
 struct ReturnStatement {
     token: Token,
-    value: Box<dyn Expression>,
+    value: Box<dyn Node>,
 }
 
-impl Statement for ReturnStatement {
+impl Node for ReturnStatement {
     fn token_literal(&self) -> Option<String> {
         return self.token.literal.to_owned();
     }
@@ -106,35 +83,28 @@ impl Statement for ReturnStatement {
             self.value.to_string()
         );
     }
-
-    fn struct_name(&self) -> String {
-        return "ReturnStatement".to_string();
-    }
 }
 
 struct ExpressionStatement {
     token: Token,
-    expression: Box<dyn Expression>,
+    expression: Box<dyn Node>,
 }
 
-impl Statement for ExpressionStatement {
+impl Node for ExpressionStatement {
     fn token_literal(&self) -> Option<String> {
         return self.token.literal.to_owned();
     }
     fn to_string(&self) -> String {
         return self.expression.to_string();
     }
-    fn struct_name(&self) -> String {
-        return "ExpressionStatement".to_string();
-    }
 }
 
 struct BlockStatement {
     token: Token,
-    statements: Vec<Box<dyn Statement>>,
+    statements: Vec<Box<dyn Node>>,
 }
 
-impl Statement for BlockStatement {
+impl Node for BlockStatement {
     fn token_literal(&self) -> Option<String> {
         return self.token.literal.to_owned();
     }
@@ -144,9 +114,6 @@ impl Statement for BlockStatement {
             str.push(format!("{};", statement.to_string()));
         }
         return str.join(" ");
-    }
-    fn struct_name(&self) -> String {
-        return "BlockStatement".to_string();
     }
 }
 
@@ -159,15 +126,12 @@ struct IdentifierExpression {
     value: String,
 }
 
-impl Expression for IdentifierExpression {
+impl Node for IdentifierExpression {
     fn token_literal(&self) -> Option<String> {
         return self.token.literal.to_owned();
     }
     fn to_string(&self) -> String {
         return self.value.clone();
-    }
-    fn struct_name(&self) -> String {
-        return "IdentifierExpression".to_string();
     }
 }
 
@@ -176,15 +140,12 @@ struct IntegerLiteralExpression {
     value: usize,
 }
 
-impl Expression for IntegerLiteralExpression {
+impl Node for IntegerLiteralExpression {
     fn token_literal(&self) -> Option<String> {
         return self.token.literal.to_owned();
     }
     fn to_string(&self) -> String {
         return self.value.clone().to_string();
-    }
-    fn struct_name(&self) -> String {
-        return "IntegerLiteralExpression".to_string();
     }
 }
 
@@ -193,44 +154,38 @@ struct BooleanExpression {
     value: bool,
 }
 
-impl Expression for BooleanExpression {
+impl Node for BooleanExpression {
     fn token_literal(&self) -> Option<String> {
         return self.token.literal.to_owned();
     }
     fn to_string(&self) -> String {
         return self.value.to_string();
     }
-    fn struct_name(&self) -> String {
-        return "BooleanExpression".to_string();
-    }
 }
 
 struct PrefixExpression {
     token: Token,
     operator: String,
-    right: Box<dyn Expression>,
+    right: Box<dyn Node>,
 }
 
-impl Expression for PrefixExpression {
+impl Node for PrefixExpression {
     fn token_literal(&self) -> Option<String> {
         return self.token.literal.to_owned();
     }
     fn to_string(&self) -> String {
         return format!("({}{})", self.operator, self.right.to_string());
     }
-    fn struct_name(&self) -> String {
-        return "PrefixExpression".to_string();
-    }
 }
 
 struct InfixExpression {
     token: Token,
-    left: Box<dyn Expression>,
+    left: Box<dyn Node>,
     operator: String,
-    right: Box<dyn Expression>,
+    right: Box<dyn Node>,
 }
 
-impl Expression for InfixExpression {
+impl Node for InfixExpression {
     fn token_literal(&self) -> Option<String> {
         return self.token.literal.to_owned();
     }
@@ -242,20 +197,16 @@ impl Expression for InfixExpression {
             self.right.to_string()
         );
     }
-
-    fn struct_name(&self) -> String {
-        return "InfixExpression".to_string();
-    }
 }
 
 struct IfExpression {
     token: Token,
-    condition: Box<dyn Expression>,
-    consequence: Box<dyn Statement>,
-    alternative: Option<Box<dyn Statement>>,
+    condition: Box<dyn Node>,
+    consequence: Box<dyn Node>,
+    alternative: Option<Box<dyn Node>>,
 }
 
-impl Expression for IfExpression {
+impl Node for IfExpression {
     fn token_literal(&self) -> Option<String> {
         return self.token.literal.to_owned();
     }
@@ -276,18 +227,15 @@ impl Expression for IfExpression {
             );
         }
     }
-    fn struct_name(&self) -> String {
-        return "IfExpression".to_string();
-    }
 }
 
 struct FunctionLiteralExpression {
     token: Token,
     parameters: Vec<IdentifierExpression>,
-    body: Box<dyn Statement>,
+    body: Box<dyn Node>,
 }
 
-impl Expression for FunctionLiteralExpression {
+impl Node for FunctionLiteralExpression {
     fn token_literal(&self) -> Option<String> {
         return self.token.literal.clone();
     }
@@ -302,18 +250,15 @@ impl Expression for FunctionLiteralExpression {
             self.body.to_string()
         );
     }
-    fn struct_name(&self) -> String {
-        return "FunctionLiteralExpression".to_string();
-    }
 }
 
 struct CallExpression {
     token: Token,
-    function: Box<dyn Expression>,
-    arguments: Vec<Box<dyn Expression>>,
+    function: Box<dyn Node>,
+    arguments: Vec<Box<dyn Node>>,
 }
 
-impl Expression for CallExpression {
+impl Node for CallExpression {
     fn token_literal(&self) -> Option<String> {
         return self.token.literal.clone();
     }
@@ -327,9 +272,6 @@ impl Expression for CallExpression {
                 .collect::<Vec<String>>()
                 .join(", ")
         );
-    }
-    fn struct_name(&self) -> String {
-        return "CallExpression".to_string();
     }
 }
 
@@ -452,7 +394,7 @@ impl Parser {
         return program;
     }
 
-    fn parse_statement(&mut self) -> Box<dyn Statement> {
+    fn parse_statement(&mut self) -> Box<dyn Node> {
         let token_type = self.current_token.token_type;
         let statement = match token_type {
             TokenType::LET => self.parse_let_statement(),
@@ -472,7 +414,7 @@ impl Parser {
         return statement;
     }
 
-    fn parse_let_statement(&mut self) -> Box<dyn Statement> {
+    fn parse_let_statement(&mut self) -> Box<dyn Node> {
         let og_token = self.current_token.clone();
 
         if !self.expect_peek(&TokenType::IDENT) {
@@ -496,7 +438,7 @@ impl Parser {
             value: self.parse_expression(PrecedenceType::LOWEST),
         });
     }
-    fn parse_return_statement(&mut self) -> Box<dyn Statement> {
+    fn parse_return_statement(&mut self) -> Box<dyn Node> {
         let og_token = self.current_token.clone();
         self.next_token();
 
@@ -509,7 +451,7 @@ impl Parser {
         });
     }
 
-    fn parse_expression_statement(&mut self) -> Box<dyn Statement> {
+    fn parse_expression_statement(&mut self) -> Box<dyn Node> {
         let expr = self.parse_expression(PrecedenceType::LOWEST);
         return Box::new(ExpressionStatement {
             token: self.current_token.clone(),
@@ -517,7 +459,7 @@ impl Parser {
         });
     }
 
-    fn parse_block_statement(&mut self) -> Box<dyn Statement> {
+    fn parse_block_statement(&mut self) -> Box<dyn Node> {
         let og_token = self.current_token.clone();
         let mut statements = vec![];
 
@@ -538,7 +480,7 @@ impl Parser {
         });
     }
 
-    fn parse_expression(&mut self, precedence: PrecedenceType) -> Box<dyn Expression> {
+    fn parse_expression(&mut self, precedence: PrecedenceType) -> Box<dyn Node> {
         let token_type = self.current_token.token_type;
 
         // Parse Left Side of Expression
@@ -582,7 +524,7 @@ impl Parser {
         }
     }
 
-    fn parse_integer_expression(&mut self) -> Box<dyn Expression> {
+    fn parse_integer_expression(&mut self) -> Box<dyn Node> {
         let expr = Box::new(IntegerLiteralExpression {
             token: self.current_token.clone(),
             value: self
@@ -595,7 +537,7 @@ impl Parser {
         });
         return expr;
     }
-    fn parse_identifier_expression(&mut self) -> Box<dyn Expression> {
+    fn parse_identifier_expression(&mut self) -> Box<dyn Node> {
         let expr = Box::new(IdentifierExpression {
             token: self.current_token.clone(),
             value: self.current_token.clone().literal.unwrap(),
@@ -603,7 +545,7 @@ impl Parser {
         return expr;
     }
 
-    fn parse_boolean_expression(&mut self) -> Box<dyn Expression> {
+    fn parse_boolean_expression(&mut self) -> Box<dyn Node> {
         let expr = Box::new(BooleanExpression {
             token: self.current_token.clone(),
             value: self
@@ -617,7 +559,7 @@ impl Parser {
         return expr;
     }
 
-    fn parse_prefix_expression(&mut self) -> Box<dyn Expression> {
+    fn parse_prefix_expression(&mut self) -> Box<dyn Node> {
         let og_token = self.current_token.clone();
         self.next_token();
 
@@ -627,7 +569,7 @@ impl Parser {
             right: self.parse_expression(PrecedenceType::PREFIX),
         });
     }
-    fn parse_infix_expression(&mut self, left: Box<dyn Expression>) -> Box<dyn Expression> {
+    fn parse_infix_expression(&mut self, left: Box<dyn Node>) -> Box<dyn Node> {
         let og_token = self.current_token.clone();
 
         let precedence = PRECEDENCE_MAP[&og_token.token_type];
@@ -640,7 +582,7 @@ impl Parser {
         });
     }
 
-    fn parse_grouped_expression(&mut self) -> Box<dyn Expression> {
+    fn parse_grouped_expression(&mut self) -> Box<dyn Node> {
         self.next_token();
 
         let expr = self.parse_expression(PrecedenceType::LOWEST);
@@ -651,7 +593,7 @@ impl Parser {
         return expr;
     }
 
-    fn parse_if_expression(&mut self) -> Box<dyn Expression> {
+    fn parse_if_expression(&mut self) -> Box<dyn Node> {
         let og_token = self.current_token.clone();
         if !self.expect_peek(&TokenType::LPAREN) {
             panic!("INVALID!");
@@ -671,7 +613,7 @@ impl Parser {
 
         let consequence = self.parse_block_statement();
 
-        let alternative: Option<Box<dyn Statement>>;
+        let alternative: Option<Box<dyn Node>>;
         if self.peek_token_is(&TokenType::ELSE) {
             self.next_token();
             if !self.expect_peek(&TokenType::LBRACE) {
@@ -690,7 +632,7 @@ impl Parser {
         });
     }
 
-    fn parse_function_expression(&mut self) -> Box<dyn Expression> {
+    fn parse_function_expression(&mut self) -> Box<dyn Node> {
         let og_token = self.current_token.clone();
 
         if !self.expect_peek(&TokenType::LPAREN) {
@@ -744,7 +686,7 @@ impl Parser {
         return identifiers;
     }
 
-    fn parse_call_expression(&mut self, func: Box<dyn Expression>) -> Box<dyn Expression> {
+    fn parse_call_expression(&mut self, func: Box<dyn Node>) -> Box<dyn Node> {
         let og_token = self.current_token.clone();
         let arguments = self.parse_call_arguments();
 
@@ -755,7 +697,7 @@ impl Parser {
         });
     }
 
-    fn parse_call_arguments(&mut self) -> Vec<Box<dyn Expression>> {
+    fn parse_call_arguments(&mut self) -> Vec<Box<dyn Node>> {
         let mut args = vec![];
 
         if self.peek_token_is(&TokenType::RPAREN) {
