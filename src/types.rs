@@ -30,7 +30,7 @@ impl Object for Integer {
 }
 
 pub struct Boolean {
-    value: bool,
+    pub value: bool,
 }
 
 impl Object for Boolean {

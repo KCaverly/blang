@@ -3,7 +3,7 @@ extern crate lazy_static;
 
 use crate::lexer::Lexer;
 use crate::token::{Token, TokenType};
-use crate::types::{Integer, Object, Type};
+use crate::types::{Boolean, Integer, Null, Object, Type};
 use downcast_rs::{impl_downcast, Downcast};
 use lazy_static::lazy_static;
 use std::collections::HashMap;
@@ -192,7 +192,7 @@ impl Node for BooleanExpression {
         return self.value.to_string();
     }
     fn eval(&self) -> Option<Box<dyn Object>> {
-        return None;
+        return Some(Box::new(Boolean { value: self.value }));
     }
 }
 
@@ -210,7 +210,39 @@ impl Node for PrefixExpression {
         return format!("({}{})", self.operator, self.right.to_string());
     }
     fn eval(&self) -> Option<Box<dyn Object>> {
-        return None;
+        let right_result = self.right.eval().unwrap();
+        let right_type = right_result.type_();
+
+        let op = self.operator.as_str();
+        let result = match op {
+            "!" => {
+                let res: bool;
+                if right_type == Type::BOOLEAN {
+                    if right_result.downcast_ref::<Boolean>().unwrap().value {
+                        res = false;
+                    } else {
+                        res = true;
+                    }
+                } else if right_type == Type::NULL {
+                    res = false;
+                } else {
+                    res = false;
+                }
+                return Some(Box::new(Boolean { value: res }));
+            }
+            "-" => {
+                let res: i64;
+                if right_type == Type::INTEGER {
+                    let val = right_result.downcast_ref::<Integer>().unwrap().value;
+                    return Some(Box::new(Integer { value: -val }));
+                } else {
+                    return None;
+                }
+            }
+            _ => None,
+        };
+
+        return result;
     }
 }
 
@@ -234,7 +266,37 @@ impl Node for InfixExpression {
         );
     }
     fn eval(&self) -> Option<Box<dyn Object>> {
-        return None;
+        let left_result = self.left.eval().unwrap();
+        let right_result = self.right.eval().unwrap();
+
+        assert!(left_result.type_() == Type::INTEGER);
+        assert!(right_result.type_() == Type::INTEGER);
+
+        let left_int = left_result.downcast_ref::<Integer>().unwrap();
+        let right_int = right_result.downcast_ref::<Integer>().unwrap();
+
+        let res: Option<Box<dyn Object>> = match self.operator.as_str() {
+            "-" => Some(Box::new(Integer {
+                value: left_int.value - right_int.value,
+            })),
+            "+" => Some(Box::new(Integer {
+                value: left_int.value + right_int.value,
+            })),
+            "/" => Some(Box::new(Integer {
+                value: left_int.value / right_int.value,
+            })),
+            "*" => Some(Box::new(Integer {
+                value: left_int.value * right_int.value,
+            })),
+            ">" => Some(Box::new(Boolean {
+                value: left_int.value > right_int.value,
+            })),
+            "<" => Some(Box::new(Boolean {
+                value: left_int.value < right_int.value,
+            })),
+            _ => None,
+        };
+        return res;
     }
 }
 
@@ -1213,7 +1275,27 @@ mod tests {
 
     #[test]
     fn test_eval_integer_expression() {
-        let test_inputs = vec![("5", 5), ("10", 10)];
+        let test_inputs = vec![
+            ("5", 5),
+            ("10", 10),
+            ("-5", -5),
+            ("-10", -10),
+            ("5 + 5", 10),
+            ("5 - 5", 0),
+            ("5 * 5", 25),
+            ("5 / 5", 1),
+            ("5 + 5 + 5 + 5 - 10", 10),
+            ("2 * 2 * 2 * 2 * 2", 32),
+            ("-50 + 100 + -50", 0),
+            ("5 * 2 + 10", 20),
+            ("5 + 2 * 10", 25),
+            ("20 + 2 * -10", 0),
+            ("50 / 2 * 2 + 10", 60),
+            ("2 * (5 + 10)", 30),
+            ("3 * 3 * 3 + 10", 37),
+            ("3 * (3 * 3) + 10", 37),
+            ("(5 + 10 * 2 + 15 / 3) * 2 + -10", 50),
+        ];
         for test_input in test_inputs {
             let lexer = Lexer::new(test_input.0.to_string());
             let mut parser = Parser::new(lexer);
@@ -1224,6 +1306,35 @@ mod tests {
             assert_eq!(&unwrapped.type_(), &Type::INTEGER);
             assert_eq!(
                 &unwrapped.downcast_ref::<Integer>().unwrap().value,
+                &test_input.1
+            );
+        }
+    }
+
+    #[test]
+    fn test_eval_boolean_expression() {
+        let test_inputs = vec![
+            ("true", true),
+            ("false", false),
+            ("!true", false),
+            ("!false", true),
+            ("5 > 5", false),
+            ("5 < 5", false),
+            ("5 > 4", true),
+            ("5 > 6", false),
+            ("5 < 3", false),
+            ("1 < 10", true),
+        ];
+        for test_input in test_inputs {
+            let lexer = Lexer::new(test_input.0.to_string());
+            let mut parser = Parser::new(lexer);
+            let program = parser.parse();
+            let obj = program.eval();
+            assert!(obj.is_some());
+            let unwrapped = obj.unwrap();
+            assert_eq!(&unwrapped.type_(), &Type::BOOLEAN);
+            assert_eq!(
+                &unwrapped.downcast_ref::<Boolean>().unwrap().value,
                 &test_input.1
             );
         }
