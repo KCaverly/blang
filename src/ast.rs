@@ -3,6 +3,7 @@ extern crate lazy_static;
 
 use crate::lexer::Lexer;
 use crate::token::{Token, TokenType};
+use crate::types::{Integer, Object, Type};
 use downcast_rs::{impl_downcast, Downcast};
 use lazy_static::lazy_static;
 use std::collections::HashMap;
@@ -10,6 +11,7 @@ use std::collections::HashMap;
 pub trait Node: Downcast {
     fn token_literal(&self) -> Option<String>;
     fn to_string(&self) -> String;
+    fn eval(&self) -> Option<Box<dyn Object>>;
 }
 
 impl_downcast!(Node);
@@ -38,6 +40,14 @@ impl Node for Program {
         }
         return str.join(" ");
     }
+
+    fn eval(&self) -> Option<Box<dyn Object>> {
+        let mut result: Option<Box<dyn Object>> = None;
+        for statement in &self.statements {
+            result = statement.eval();
+        }
+        return result;
+    }
 }
 
 ///////////////
@@ -64,6 +74,10 @@ impl Node for LetStatement {
         )
         .to_string();
     }
+
+    fn eval(&self) -> Option<Box<dyn Object>> {
+        return None;
+    }
 }
 
 struct ReturnStatement {
@@ -83,6 +97,10 @@ impl Node for ReturnStatement {
             self.value.to_string()
         );
     }
+
+    fn eval(&self) -> Option<Box<dyn Object>> {
+        return None;
+    }
 }
 
 struct ExpressionStatement {
@@ -96,6 +114,9 @@ impl Node for ExpressionStatement {
     }
     fn to_string(&self) -> String {
         return self.expression.to_string();
+    }
+    fn eval(&self) -> Option<Box<dyn Object>> {
+        return self.expression.eval();
     }
 }
 
@@ -115,6 +136,9 @@ impl Node for BlockStatement {
         }
         return str.join(" ");
     }
+    fn eval(&self) -> Option<Box<dyn Object>> {
+        return None;
+    }
 }
 
 ////////////////
@@ -133,11 +157,14 @@ impl Node for IdentifierExpression {
     fn to_string(&self) -> String {
         return self.value.clone();
     }
+    fn eval(&self) -> Option<Box<dyn Object>> {
+        return None;
+    }
 }
 
 struct IntegerLiteralExpression {
     token: Token,
-    value: usize,
+    value: i64,
 }
 
 impl Node for IntegerLiteralExpression {
@@ -146,6 +173,9 @@ impl Node for IntegerLiteralExpression {
     }
     fn to_string(&self) -> String {
         return self.value.clone().to_string();
+    }
+    fn eval(&self) -> Option<Box<dyn Object>> {
+        return Some(Box::new(Integer { value: self.value }));
     }
 }
 
@@ -161,6 +191,9 @@ impl Node for BooleanExpression {
     fn to_string(&self) -> String {
         return self.value.to_string();
     }
+    fn eval(&self) -> Option<Box<dyn Object>> {
+        return None;
+    }
 }
 
 struct PrefixExpression {
@@ -175,6 +208,9 @@ impl Node for PrefixExpression {
     }
     fn to_string(&self) -> String {
         return format!("({}{})", self.operator, self.right.to_string());
+    }
+    fn eval(&self) -> Option<Box<dyn Object>> {
+        return None;
     }
 }
 
@@ -196,6 +232,9 @@ impl Node for InfixExpression {
             self.operator,
             self.right.to_string()
         );
+    }
+    fn eval(&self) -> Option<Box<dyn Object>> {
+        return None;
     }
 }
 
@@ -227,6 +266,9 @@ impl Node for IfExpression {
             );
         }
     }
+    fn eval(&self) -> Option<Box<dyn Object>> {
+        return None;
+    }
 }
 
 struct FunctionLiteralExpression {
@@ -250,6 +292,9 @@ impl Node for FunctionLiteralExpression {
             self.body.to_string()
         );
     }
+    fn eval(&self) -> Option<Box<dyn Object>> {
+        return None;
+    }
 }
 
 struct CallExpression {
@@ -272,6 +317,10 @@ impl Node for CallExpression {
                 .collect::<Vec<String>>()
                 .join(", ")
         );
+    }
+
+    fn eval(&self) -> Option<Box<dyn Object>> {
+        return None;
     }
 }
 
@@ -532,7 +581,7 @@ impl Parser {
                 .clone()
                 .literal
                 .unwrap()
-                .parse::<usize>()
+                .parse::<i64>()
                 .unwrap(),
         });
         return expr;
@@ -1158,6 +1207,24 @@ mod tests {
                     .arguments
                     .len(),
                 test_input.3
+            );
+        }
+    }
+
+    #[test]
+    fn test_eval_integer_expression() {
+        let test_inputs = vec![("5", 5), ("10", 10)];
+        for test_input in test_inputs {
+            let lexer = Lexer::new(test_input.0.to_string());
+            let mut parser = Parser::new(lexer);
+            let program = parser.parse();
+            let obj = program.eval();
+            assert!(obj.is_some());
+            let unwrapped = obj.unwrap();
+            assert_eq!(&unwrapped.type_(), &Type::INTEGER);
+            assert_eq!(
+                &unwrapped.downcast_ref::<Integer>().unwrap().value,
+                &test_input.1
             );
         }
     }
