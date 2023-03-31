@@ -137,7 +137,11 @@ impl Node for BlockStatement {
         return str.join(" ");
     }
     fn eval(&self) -> Option<Box<dyn Object>> {
-        return None;
+        let mut result: Option<Box<dyn Object>> = None;
+        for statement in &self.statements {
+            result = statement.eval();
+        }
+        return result;
     }
 }
 
@@ -351,7 +355,28 @@ impl Node for IfExpression {
         }
     }
     fn eval(&self) -> Option<Box<dyn Object>> {
-        return None;
+        let condition_result = self.condition.eval();
+        let use_first: bool;
+        if condition_result.is_some() {
+            let unwrapped = condition_result.unwrap();
+            if &unwrapped.type_() == &Type::BOOLEAN {
+                use_first = unwrapped.downcast_ref::<Boolean>().unwrap().value;
+            } else {
+                use_first = true;
+            }
+        } else {
+            use_first = false;
+        }
+
+        if use_first {
+            let res = self.consequence.eval();
+            return res;
+        } else if self.alternative.is_some() {
+            let unwrapped = self.alternative.as_ref().unwrap();
+            return unwrapped.eval();
+        } else {
+            return None;
+        }
     }
 }
 
@@ -1319,18 +1344,22 @@ mod tests {
             ("(5 + 10 * 2 + 15 / 3) * 2 + -10", 50),
         ];
         for test_input in test_inputs {
-            let lexer = Lexer::new(test_input.0.to_string());
-            let mut parser = Parser::new(lexer);
-            let program = parser.parse();
-            let obj = program.eval();
-            assert!(obj.is_some());
-            let unwrapped = obj.unwrap();
-            assert_eq!(&unwrapped.type_(), &Type::INTEGER);
-            assert_eq!(
-                &unwrapped.downcast_ref::<Integer>().unwrap().value,
-                &test_input.1
-            );
+            test_eval_integer(test_input);
         }
+    }
+
+    fn test_eval_integer(test_input: (&str, i64)) {
+        let lexer = Lexer::new(test_input.0.to_string());
+        let mut parser = Parser::new(lexer);
+        let program = parser.parse();
+        let obj = program.eval();
+        assert!(obj.is_some());
+        let unwrapped = obj.unwrap();
+        assert_eq!(&unwrapped.type_(), &Type::INTEGER);
+        assert_eq!(
+            &unwrapped.downcast_ref::<Integer>().unwrap().value,
+            &test_input.1
+        );
     }
 
     #[test]
@@ -1355,18 +1384,32 @@ mod tests {
             ("(2 < 1) == false", true),
         ];
         for test_input in test_inputs {
-            println!("{:?}", test_input.0);
-            let lexer = Lexer::new(test_input.0.to_string());
-            let mut parser = Parser::new(lexer);
-            let program = parser.parse();
-            let obj = program.eval();
-            assert!(obj.is_some());
-            let unwrapped = obj.unwrap();
-            assert_eq!(&unwrapped.type_(), &Type::BOOLEAN);
-            assert_eq!(
-                &unwrapped.downcast_ref::<Boolean>().unwrap().value,
-                &test_input.1
-            );
+            test_eval_boolean(test_input);
+        }
+    }
+
+    fn test_eval_boolean(test_input: (&str, bool)) {
+        let lexer = Lexer::new(test_input.0.to_string());
+        let mut parser = Parser::new(lexer);
+        let program = parser.parse();
+        let obj = program.eval();
+        assert!(obj.is_some());
+        let unwrapped = obj.unwrap();
+        assert_eq!(&unwrapped.type_(), &Type::BOOLEAN);
+        assert_eq!(
+            &unwrapped.downcast_ref::<Boolean>().unwrap().value,
+            &test_input.1
+        );
+    }
+
+    #[test]
+    fn test_if_expression_integer() {
+        let test_inputs = vec![
+            ("if (5 == 5) { 10; }", 10),
+            ("if (1 == 2) { 10; } else { 5; }", 5),
+        ];
+        for test_input in test_inputs {
+            test_eval_integer(test_input);
         }
     }
 }
