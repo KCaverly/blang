@@ -231,7 +231,6 @@ impl Node for PrefixExpression {
                 return Some(Box::new(Boolean { value: res }));
             }
             "-" => {
-                let res: i64;
                 if right_type == Type::INTEGER {
                     let val = right_result.downcast_ref::<Integer>().unwrap().value;
                     return Some(Box::new(Integer { value: -val }));
@@ -269,34 +268,57 @@ impl Node for InfixExpression {
         let left_result = self.left.eval().unwrap();
         let right_result = self.right.eval().unwrap();
 
-        assert!(left_result.type_() == Type::INTEGER);
-        assert!(right_result.type_() == Type::INTEGER);
+        if left_result.type_() == Type::INTEGER && right_result.type_() == Type::INTEGER {
+            let left_int = left_result.downcast_ref::<Integer>().unwrap();
+            let right_int = right_result.downcast_ref::<Integer>().unwrap();
 
-        let left_int = left_result.downcast_ref::<Integer>().unwrap();
-        let right_int = right_result.downcast_ref::<Integer>().unwrap();
+            let res: Option<Box<dyn Object>> = match self.operator.as_str() {
+                "-" => Some(Box::new(Integer {
+                    value: left_int.value - right_int.value,
+                })),
+                "+" => Some(Box::new(Integer {
+                    value: left_int.value + right_int.value,
+                })),
+                "/" => Some(Box::new(Integer {
+                    value: left_int.value / right_int.value,
+                })),
+                "*" => Some(Box::new(Integer {
+                    value: left_int.value * right_int.value,
+                })),
+                ">" => Some(Box::new(Boolean {
+                    value: left_int.value > right_int.value,
+                })),
+                "<" => Some(Box::new(Boolean {
+                    value: left_int.value < right_int.value,
+                })),
+                "==" => Some(Box::new(Boolean {
+                    value: left_int.value == right_int.value,
+                })),
+                "!=" => Some(Box::new(Boolean {
+                    value: left_int.value != right_int.value,
+                })),
+                _ => None,
+            };
+            return res;
+        } else if left_result.type_() == Type::BOOLEAN && left_result.type_() == Type::BOOLEAN {
+            let left_bool = left_result.downcast_ref::<Boolean>().unwrap();
+            let right_bool = right_result.downcast_ref::<Boolean>().unwrap();
 
-        let res: Option<Box<dyn Object>> = match self.operator.as_str() {
-            "-" => Some(Box::new(Integer {
-                value: left_int.value - right_int.value,
-            })),
-            "+" => Some(Box::new(Integer {
-                value: left_int.value + right_int.value,
-            })),
-            "/" => Some(Box::new(Integer {
-                value: left_int.value / right_int.value,
-            })),
-            "*" => Some(Box::new(Integer {
-                value: left_int.value * right_int.value,
-            })),
-            ">" => Some(Box::new(Boolean {
-                value: left_int.value > right_int.value,
-            })),
-            "<" => Some(Box::new(Boolean {
-                value: left_int.value < right_int.value,
-            })),
-            _ => None,
-        };
-        return res;
+            let res: Option<Box<dyn Object>> = match self.operator.as_str() {
+                "==" => Some(Box::new(Boolean {
+                    value: left_bool.value == right_bool.value,
+                })),
+                "!=" => Some(Box::new(Boolean {
+                    value: left_bool.value != right_bool.value,
+                })),
+                _ => None,
+            };
+            return res;
+        } else {
+            return None;
+        }
+
+        return None;
     }
 }
 
@@ -1324,8 +1346,16 @@ mod tests {
             ("5 > 6", false),
             ("5 < 3", false),
             ("1 < 10", true),
+            ("1 == 15", false),
+            ("1 == 1", true),
+            ("1 != 15", true),
+            ("1 != 1", false),
+            ("(2 > 1) == true", true),
+            ("(2 == 2) == true", true),
+            ("(2 < 1) == false", true),
         ];
         for test_input in test_inputs {
+            println!("{:?}", test_input.0);
             let lexer = Lexer::new(test_input.0.to_string());
             let mut parser = Parser::new(lexer);
             let program = parser.parse();
