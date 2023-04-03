@@ -7,6 +7,7 @@ pub enum Type {
     INTEGER,
     BOOLEAN,
     NULL,
+    RETURN,
 }
 
 pub trait Object: Downcast {

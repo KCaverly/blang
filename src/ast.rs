@@ -45,6 +45,12 @@ impl Node for Program {
         let mut result: Option<Box<dyn Object>> = None;
         for statement in &self.statements {
             result = statement.eval();
+
+            if result.is_some() {
+                if statement.token_literal().unwrap() == "return" {
+                    break;
+                };
+            }
         }
         return result;
     }
@@ -99,7 +105,8 @@ impl Node for ReturnStatement {
     }
 
     fn eval(&self) -> Option<Box<dyn Object>> {
-        return None;
+        let val = self.value.eval();
+        return val;
     }
 }
 
@@ -140,6 +147,11 @@ impl Node for BlockStatement {
         let mut result: Option<Box<dyn Object>> = None;
         for statement in &self.statements {
             result = statement.eval();
+            if result.is_some() {
+                if statement.token_literal().unwrap() == "return" {
+                    break;
+                };
+            }
         }
         return result;
     }
@@ -602,10 +614,7 @@ impl Parser {
 
         return Box::new(ReturnStatement {
             token: og_token,
-            value: Box::new(IdentifierExpression {
-                token: self.peek_token.clone(),
-                value: "".to_string(),
-            }),
+            value: self.parse_expression(PrecedenceType::LOWEST),
         });
     }
 
@@ -1382,8 +1391,11 @@ mod tests {
             ("(2 > 1) == true", true),
             ("(2 == 2) == true", true),
             ("(2 < 1) == false", true),
+            ("5; return true;", true),
+            ("let x = 5; return false; true;", false),
         ];
         for test_input in test_inputs {
+            println!("{:?}", test_input.0);
             test_eval_boolean(test_input);
         }
     }
