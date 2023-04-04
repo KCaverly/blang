@@ -3,7 +3,7 @@ extern crate lazy_static;
 
 use crate::lexer::Lexer;
 use crate::token::{Token, TokenType};
-use crate::types::{Boolean, Integer, Null, Object, Type};
+use crate::types::{Boolean, Integer, Object, Type};
 use downcast_rs::{impl_downcast, Downcast};
 use lazy_static::lazy_static;
 use std::collections::HashMap;
@@ -46,10 +46,8 @@ impl Node for Program {
         for statement in &self.statements {
             result = statement.eval();
 
-            if result.is_some() {
-                if statement.token_literal().unwrap() == "return" {
-                    break;
-                };
+            if statement.as_ref().token_literal().unwrap() == "return" {
+                break;
             }
         }
         return result;
@@ -105,8 +103,7 @@ impl Node for ReturnStatement {
     }
 
     fn eval(&self) -> Option<Box<dyn Object>> {
-        let val = self.value.eval();
-        return val;
+        return self.value.eval();
     }
 }
 
@@ -147,10 +144,8 @@ impl Node for BlockStatement {
         let mut result: Option<Box<dyn Object>> = None;
         for statement in &self.statements {
             result = statement.eval();
-            if result.is_some() {
-                if statement.token_literal().unwrap() == "return" {
-                    break;
-                };
+            if statement.as_ref().token_literal().unwrap() == "return" {
+                break;
             }
         }
         return result;
@@ -333,8 +328,6 @@ impl Node for InfixExpression {
         } else {
             return None;
         }
-
-        return None;
     }
 }
 
@@ -1351,8 +1344,12 @@ mod tests {
             ("3 * 3 * 3 + 10", 37),
             ("3 * (3 * 3) + 10", 37),
             ("(5 + 10 * 2 + 15 / 3) * 2 + -10", 50),
+            ("5; return 10; 15;", 10),
+            ("return 15; 19 + 15; 5 == 5;", 15),
+            ("10 == 10; 10 != 11; return 1;", 1),
         ];
         for test_input in test_inputs {
+            println!("{:?}", test_input.0);
             test_eval_integer(test_input);
         }
     }
@@ -1391,11 +1388,8 @@ mod tests {
             ("(2 > 1) == true", true),
             ("(2 == 2) == true", true),
             ("(2 < 1) == false", true),
-            ("5; return true;", true),
-            ("let x = 5; return false; true;", false),
         ];
         for test_input in test_inputs {
-            println!("{:?}", test_input.0);
             test_eval_boolean(test_input);
         }
     }
