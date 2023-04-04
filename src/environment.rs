@@ -1,4 +1,4 @@
-use crate::types::Object;
+use crate::types::{Error, Object};
 use std::collections::HashMap;
 
 pub struct Environment {
@@ -24,12 +24,13 @@ impl Environment {
         return self.store.contains_key(key);
     }
 
-    pub fn get(&self, key: &str) -> Option<Box<dyn Object>> {
+    pub fn get(&self, key: &str) -> Box<dyn Object> {
         let obj = self.store.get(key);
-        println!("{:?}", obj.unwrap().inspect());
         if obj.is_none() {
-            return None;
+            return Box::new(Error {
+                message: format!("unknown identifier: {}", key),
+            });
         }
-        return Some(obj.unwrap().get_box());
+        return obj.unwrap().get_box();
     }
 }

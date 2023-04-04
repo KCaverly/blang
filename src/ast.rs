@@ -19,7 +19,7 @@ use std::collections::HashMap;
 // Helper //
 ////////////
 
-fn is_error(object: Option<&Box<dyn Object>>) -> bool {
+pub fn is_error(object: Option<&Box<dyn Object>>) -> bool {
     if object.is_some() {
         if object.as_ref().unwrap().type_() == Type::ERROR {
             return true;
@@ -1461,10 +1461,10 @@ mod tests {
                 "10; 5 + true; return 15;",
                 "type mismatch: INTEGER + BOOLEAN",
             ),
-            ("-true", "unknown operator: -BOOLEAN"),
+            ("-true", "invalid type: -BOOLEAN"),
             ("-(5 + true)", "type mismatch: INTEGER + BOOLEAN"),
             ("if (5 + true) { x }", "type mismatch: INTEGER + BOOLEAN"),
-            ("foobar;", "identifier not found: foobar"),
+            ("foobar;", "unknown identifier: foobar"),
         ];
 
         for test_input in test_inputs {
@@ -1499,9 +1499,6 @@ mod tests {
 
         assert!(program.environment.has_key(test_input.1));
         let val = program.environment.get(test_input.1);
-        assert_eq!(
-            val.unwrap().downcast_ref::<Integer>().unwrap().value,
-            test_input.2
-        );
+        assert_eq!(val.downcast_ref::<Integer>().unwrap().value, test_input.2);
     }
 }

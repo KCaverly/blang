@@ -42,11 +42,11 @@ impl ProgramNode for LetStatement {
         return self.token.literal.to_owned();
     }
 
-    fn eval(&self, env: &Environment) -> Option<Box<dyn Object>> {
+    fn eval(&self, env: &mut Environment) -> Option<Box<dyn Object>> {
         return None;
     }
 
-    fn update_env(&self, env: &Environment) -> Option<(String, Box<dyn Object>)> {
+    fn update_env(&self, env: &mut Environment) -> Option<(String, Box<dyn Object>)> {
         let result = self.value.eval(env);
         if result.is_some() {
             return Some((self.name.to_string(), result.unwrap()));
@@ -78,11 +78,11 @@ impl ProgramNode for ReturnStatement {
     fn token_literal(&self) -> Option<String> {
         return self.token.literal.to_owned();
     }
-    fn eval(&self, env: &Environment) -> Option<Box<dyn Object>> {
+    fn eval(&self, env: &mut Environment) -> Option<Box<dyn Object>> {
         return self.value.eval(env);
     }
-    fn update_env(&self, env: &Environment) -> Option<(String, Box<dyn Object>)> {
-        todo!();
+    fn update_env(&self, env: &mut Environment) -> Option<(String, Box<dyn Object>)> {
+        return None;
     }
 }
 
@@ -104,10 +104,10 @@ impl ProgramNode for ExpressionStatement {
     fn token_literal(&self) -> Option<String> {
         return self.token.literal.to_owned();
     }
-    fn eval(&self, env: &Environment) -> Option<Box<dyn Object>> {
+    fn eval(&self, env: &mut Environment) -> Option<Box<dyn Object>> {
         return self.expression.eval(env);
     }
-    fn update_env(&self, env: &Environment) -> Option<(String, Box<dyn Object>)> {
+    fn update_env(&self, env: &mut Environment) -> Option<(String, Box<dyn Object>)> {
         return self.expression.update_env(env);
     }
 }
@@ -134,15 +134,29 @@ impl ProgramNode for BlockStatement {
     fn token_literal(&self) -> Option<String> {
         return self.token.literal.to_owned();
     }
-    fn eval(&self, env: &Environment) -> Option<Box<dyn Object>> {
+    fn eval(&self, env: &mut Environment) -> Option<Box<dyn Object>> {
         let mut result: Option<Box<dyn Object>> = None;
         for statement in &self.statements {
             result = statement.eval(env);
+
+            if statement.token_literal().unwrap() == "return" {
+                return result;
+            }
+
+            if is_error(result.as_ref()) {
+                return result;
+            }
+
+            let env_update = statement.update_env(env);
+            if env_update.is_some() {
+                let unwrapped = env_update.unwrap();
+                env.update(unwrapped.0, unwrapped.1);
+            }
         }
 
         return result;
     }
-    fn update_env(&self, env: &Environment) -> Option<(String, Box<dyn Object>)> {
+    fn update_env(&self, env: &mut Environment) -> Option<(String, Box<dyn Object>)> {
         todo!();
     }
 }
@@ -165,10 +179,10 @@ impl ProgramNode for IdentifierExpression {
     fn token_literal(&self) -> Option<String> {
         return self.token.literal.to_owned();
     }
-    fn eval(&self, env: &Environment) -> Option<Box<dyn Object>> {
-        return None;
+    fn eval(&self, env: &mut Environment) -> Option<Box<dyn Object>> {
+        return Some(env.get(&self.value));
     }
-    fn update_env(&self, env: &Environment) -> Option<(String, Box<dyn Object>)> {
+    fn update_env(&self, env: &mut Environment) -> Option<(String, Box<dyn Object>)> {
         return None;
     }
 }
@@ -191,10 +205,10 @@ impl ProgramNode for IntegerLiteralExpression {
     fn token_literal(&self) -> Option<String> {
         return self.token.literal.to_owned();
     }
-    fn eval(&self, env: &Environment) -> Option<Box<dyn Object>> {
+    fn eval(&self, env: &mut Environment) -> Option<Box<dyn Object>> {
         return Some(Box::new(Integer { value: self.value }));
     }
-    fn update_env(&self, env: &Environment) -> Option<(String, Box<dyn Object>)> {
+    fn update_env(&self, env: &mut Environment) -> Option<(String, Box<dyn Object>)> {
         return None;
     }
 }
@@ -217,11 +231,11 @@ impl ProgramNode for BooleanExpression {
     fn token_literal(&self) -> Option<String> {
         return self.token.literal.to_owned();
     }
-    fn eval(&self, env: &Environment) -> Option<Box<dyn Object>> {
+    fn eval(&self, env: &mut Environment) -> Option<Box<dyn Object>> {
         return Some(Box::new(Boolean { value: self.value }));
     }
-    fn update_env(&self, env: &Environment) -> Option<(String, Box<dyn Object>)> {
-        todo!();
+    fn update_env(&self, env: &mut Environment) -> Option<(String, Box<dyn Object>)> {
+        return None;
     }
 }
 
@@ -248,11 +262,51 @@ impl ProgramNode for PrefixExpression {
     fn token_literal(&self) -> Option<String> {
         return self.token.literal.to_owned();
     }
-    fn eval(&self, env: &Environment) -> Option<Box<dyn Object>> {
-        todo!();
+    fn eval(&self, env: &mut Environment) -> Option<Box<dyn Object>> {
+        let right_eval = self.right.eval(env);
+        let right_result = right_eval.as_ref().unwrap();
+        if is_error(right_eval.as_ref()) {
+            return right_eval;
+        }
+        let right_type = right_result.type_();
+
+        let op = self.operator.as_str();
+        match op {
+            "!" => {
+                let res: bool;
+                if right_type == Type::BOOLEAN {
+                    if right_result.downcast_ref::<Boolean>().unwrap().value {
+                        res = false;
+                    } else {
+                        res = true;
+                    }
+                } else if right_type == Type::NULL {
+                    res = false;
+                } else {
+                    res = false;
+                }
+                return Some(Box::new(Boolean { value: res }));
+            }
+            "-" => {
+                if right_type == Type::INTEGER {
+                    let val = right_result.downcast_ref::<Integer>().unwrap().value;
+                    return Some(Box::new(Integer { value: -val }));
+                } else {
+                    return Some(Box::new(Error {
+                        message: format!("invalid type: -{:?}", right_type),
+                    }));
+                }
+            }
+            _ => {
+                return Some(Box::new(Error {
+                    message: format!("unknown operator: {:?}", op),
+                }));
+            }
+        }
     }
-    fn update_env(&self, env: &Environment) -> Option<(String, Box<dyn Object>)> {
-        todo!();
+
+    fn update_env(&self, env: &mut Environment) -> Option<(String, Box<dyn Object>)> {
+        return None;
     }
 }
 
@@ -291,7 +345,7 @@ impl ProgramNode for InfixExpression {
     fn token_literal(&self) -> Option<String> {
         return self.token.literal.to_owned();
     }
-    fn eval(&self, env: &Environment) -> Option<Box<dyn Object>> {
+    fn eval(&self, env: &mut Environment) -> Option<Box<dyn Object>> {
         // Check Left
         let left_eval = self.left.eval(env);
         if is_error(left_eval.as_ref()) {
@@ -363,8 +417,8 @@ impl ProgramNode for InfixExpression {
             }));
         }
     }
-    fn update_env(&self, env: &Environment) -> Option<(String, Box<dyn Object>)> {
-        todo!();
+    fn update_env(&self, env: &mut Environment) -> Option<(String, Box<dyn Object>)> {
+        return None;
     }
 }
 
@@ -412,7 +466,7 @@ impl ProgramNode for IfExpression {
     fn token_literal(&self) -> Option<String> {
         return self.token.literal.to_owned();
     }
-    fn eval(&self, env: &Environment) -> Option<Box<dyn Object>> {
+    fn eval(&self, env: &mut Environment) -> Option<Box<dyn Object>> {
         let condition_result = self.condition.eval(env);
         if is_error(condition_result.as_ref()) {
             return condition_result;
@@ -440,8 +494,8 @@ impl ProgramNode for IfExpression {
             return None;
         }
     }
-    fn update_env(&self, env: &Environment) -> Option<(String, Box<dyn Object>)> {
-        todo!();
+    fn update_env(&self, env: &mut Environment) -> Option<(String, Box<dyn Object>)> {
+        return None;
     }
 }
 
@@ -480,10 +534,10 @@ impl ProgramNode for FunctionLiteralExpression {
     fn token_literal(&self) -> Option<String> {
         return self.token.literal.clone();
     }
-    fn eval(&self, env: &Environment) -> Option<Box<dyn Object>> {
+    fn eval(&self, env: &mut Environment) -> Option<Box<dyn Object>> {
         todo!();
     }
-    fn update_env(&self, env: &Environment) -> Option<(String, Box<dyn Object>)> {
+    fn update_env(&self, env: &mut Environment) -> Option<(String, Box<dyn Object>)> {
         todo!();
     }
 }
@@ -523,10 +577,10 @@ impl ProgramNode for CallExpression {
     fn token_literal(&self) -> Option<String> {
         return self.token.literal.clone();
     }
-    fn eval(&self, env: &Environment) -> Option<Box<dyn Object>> {
+    fn eval(&self, env: &mut Environment) -> Option<Box<dyn Object>> {
         todo!();
     }
-    fn update_env(&self, env: &Environment) -> Option<(String, Box<dyn Object>)> {
+    fn update_env(&self, env: &mut Environment) -> Option<(String, Box<dyn Object>)> {
         todo!();
     }
 }

@@ -1,3 +1,4 @@
+use crate::ast::is_error;
 use crate::environment::Environment;
 use crate::types::{Integer, Object};
 use downcast_rs::{impl_downcast, Downcast};
@@ -37,10 +38,18 @@ impl Program {
         let mut result: Option<Box<dyn Object>> = None;
         for idx in self.current_idx..self.total_statements() {
             // Get Result
-            result = self.statements[idx].eval(&self.environment);
+            result = self.statements[idx].eval(&mut self.environment);
+
+            if self.statements[idx].token_literal().unwrap() == "return" {
+                return result;
+            }
+
+            if is_error(result.as_ref()) {
+                return result;
+            }
 
             // Update environment if Needed
-            let env_update = self.statements[idx].update_env(&self.environment);
+            let env_update = self.statements[idx].update_env(&mut self.environment);
             if env_update.is_some() {
                 let unwrapped = env_update.unwrap();
                 self.update_env(unwrapped.0, unwrapped.1);
@@ -57,8 +66,8 @@ impl Program {
 pub trait ProgramNode: Downcast {
     fn to_string(&self) -> String;
     fn token_literal(&self) -> Option<String>;
-    fn eval(&self, env: &Environment) -> Option<Box<dyn Object>>;
-    fn update_env(&self, env: &Environment) -> Option<(String, Box<dyn Object>)>;
+    fn eval(&self, env: &mut Environment) -> Option<Box<dyn Object>>;
+    fn update_env(&self, env: &mut Environment) -> Option<(String, Box<dyn Object>)>;
 }
 
 impl_downcast!(ProgramNode);
@@ -75,13 +84,13 @@ mod tests {
             return "".to_string();
         }
         fn token_literal(&self) -> Option<String> {
-            return None;
+            return Some(format!("{}", self.value));
         }
-        fn eval(&self, env: &Environment) -> Option<Box<dyn Object>> {
+        fn eval(&self, env: &mut Environment) -> Option<Box<dyn Object>> {
             return Some(Box::new(Integer { value: self.value }));
         }
 
-        fn update_env(&self, env: &Environment) -> Option<(String, Box<dyn Object>)> {
+        fn update_env(&self, env: &mut Environment) -> Option<(String, Box<dyn Object>)> {
             return Some(("Test".to_string(), Box::new(Integer { value: 5 })));
         }
     }
