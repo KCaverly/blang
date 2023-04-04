@@ -3,7 +3,7 @@ extern crate lazy_static;
 
 use crate::lexer::Lexer;
 use crate::token::{Token, TokenType};
-use crate::types::{Boolean, Integer, Object, Type};
+use crate::types::{Boolean, Error, Integer, Object, Type};
 use downcast_rs::{impl_downcast, Downcast};
 use lazy_static::lazy_static;
 use std::collections::HashMap;
@@ -15,6 +15,19 @@ pub trait Node: Downcast {
 }
 
 impl_downcast!(Node);
+
+////////////
+// Helper //
+////////////
+
+fn is_error(object: Option<&Box<dyn Object>>) -> bool {
+    if object.is_some() {
+        if object.as_ref().unwrap().type_() == Type::ERROR {
+            return true;
+        }
+    }
+    return false;
+}
 
 /////////////
 // Program //
@@ -47,6 +60,10 @@ impl Node for Program {
             result = statement.eval();
 
             if statement.as_ref().token_literal().unwrap() == "return" {
+                break;
+            }
+
+            if result.as_ref().unwrap().type_() == Type::ERROR {
                 break;
             }
         }
@@ -147,6 +164,10 @@ impl Node for BlockStatement {
             if statement.as_ref().token_literal().unwrap() == "return" {
                 break;
             }
+
+            if result.as_ref().unwrap().type_() == Type::ERROR {
+                break;
+            }
         }
         return result;
     }
@@ -221,11 +242,15 @@ impl Node for PrefixExpression {
         return format!("({}{})", self.operator, self.right.to_string());
     }
     fn eval(&self) -> Option<Box<dyn Object>> {
-        let right_result = self.right.eval().unwrap();
+        let right_eval = self.right.eval();
+        let right_result = right_eval.as_ref().unwrap();
+        if is_error(right_eval.as_ref()) {
+            return right_eval;
+        }
         let right_type = right_result.type_();
 
         let op = self.operator.as_str();
-        let result = match op {
+        match op {
             "!" => {
                 let res: bool;
                 if right_type == Type::BOOLEAN {
@@ -246,13 +271,18 @@ impl Node for PrefixExpression {
                     let val = right_result.downcast_ref::<Integer>().unwrap().value;
                     return Some(Box::new(Integer { value: -val }));
                 } else {
-                    return None;
+                    return Some(Box::new(Error {
+                        message: format!("unknown operator: -{:?}", right_type),
+                    }));
                 }
             }
-            _ => None,
+            _ => {
+                // I think this error may be impossible given upstream calls...
+                return Some(Box::new(Error {
+                    message: format!("unknown operator: {:?}", op),
+                }));
+            }
         };
-
-        return result;
     }
 }
 
@@ -276,8 +306,20 @@ impl Node for InfixExpression {
         );
     }
     fn eval(&self) -> Option<Box<dyn Object>> {
-        let left_result = self.left.eval().unwrap();
-        let right_result = self.right.eval().unwrap();
+        // Check left
+        let left_eval = self.left.eval();
+
+        if is_error(left_eval.as_ref()) {
+            return left_eval;
+        }
+        let left_result = left_eval.unwrap();
+
+        // Check right
+        let right_eval = self.right.eval();
+        if is_error(right_eval.as_ref()) {
+            return right_eval;
+        }
+        let right_result = right_eval.unwrap();
 
         if left_result.type_() == Type::INTEGER && right_result.type_() == Type::INTEGER {
             let left_int = left_result.downcast_ref::<Integer>().unwrap();
@@ -311,7 +353,7 @@ impl Node for InfixExpression {
                 _ => None,
             };
             return res;
-        } else if left_result.type_() == Type::BOOLEAN && left_result.type_() == Type::BOOLEAN {
+        } else if left_result.type_() == Type::BOOLEAN && right_result.type_() == Type::BOOLEAN {
             let left_bool = left_result.downcast_ref::<Boolean>().unwrap();
             let right_bool = right_result.downcast_ref::<Boolean>().unwrap();
 
@@ -326,7 +368,14 @@ impl Node for InfixExpression {
             };
             return res;
         } else {
-            return None;
+            return Some(Box::new(Error {
+                message: format!(
+                    "type mismatch: {:?} {} {:?}",
+                    left_result.type_(),
+                    self.operator.as_str(),
+                    right_result.type_()
+                ),
+            }));
         }
     }
 }
@@ -361,6 +410,9 @@ impl Node for IfExpression {
     }
     fn eval(&self) -> Option<Box<dyn Object>> {
         let condition_result = self.condition.eval();
+        if is_error(condition_result.as_ref()) {
+            return condition_result;
+        }
         let use_first: bool;
         if condition_result.is_some() {
             let unwrapped = condition_result.unwrap();
@@ -1417,5 +1469,35 @@ mod tests {
         for test_input in test_inputs {
             test_eval_integer(test_input);
         }
+    }
+
+    #[test]
+    fn test_error_handling() {
+        let test_inputs = vec![
+            ("5 + true", "type mismatch: INTEGER + BOOLEAN"),
+            ("true - 10", "type mismatch: BOOLEAN - INTEGER"),
+            (
+                "10; 5 + true; return 15;",
+                "type mismatch: INTEGER + BOOLEAN",
+            ),
+            ("-true", "unknown operator: -BOOLEAN"),
+            ("-(5 + true)", "type mismatch: INTEGER + BOOLEAN"),
+            ("if (5 + true) { x }", "type mismatch: INTEGER + BOOLEAN"),
+        ];
+
+        for test_input in test_inputs {
+            test_eval_error(test_input);
+        }
+    }
+
+    fn test_eval_error(test_input: (&str, &str)) {
+        let lexer = Lexer::new(test_input.0.to_string());
+        let mut parser = Parser::new(lexer);
+        let program = parser.parse();
+        let obj = program.eval();
+        assert!(obj.is_some());
+        let unwrapped = obj.unwrap();
+
+        assert_eq!(unwrapped.inspect(), test_input.1);
     }
 }

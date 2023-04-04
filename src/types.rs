@@ -7,7 +7,7 @@ pub enum Type {
     INTEGER,
     BOOLEAN,
     NULL,
-    RETURN,
+    ERROR,
 }
 
 pub trait Object: Downcast {
@@ -51,5 +51,18 @@ impl Object for Null {
     }
     fn inspect(&self) -> String {
         return "null".to_string();
+    }
+}
+
+pub struct Error {
+    pub message: String,
+}
+
+impl Object for Error {
+    fn type_(&self) -> Type {
+        return Type::ERROR;
+    }
+    fn inspect(&self) -> String {
+        return self.message.to_owned();
     }
 }
