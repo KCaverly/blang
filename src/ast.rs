@@ -1,6 +1,7 @@
 extern crate downcast_rs;
 extern crate lazy_static;
 
+use crate::environment::ENVIRONMENT;
 use crate::lexer::Lexer;
 use crate::token::{Token, TokenType};
 use crate::types::{Boolean, Error, Integer, Object, Type};
@@ -97,6 +98,17 @@ impl Node for LetStatement {
     }
 
     fn eval(&self) -> Option<Box<dyn Object>> {
+        if ENVIRONMENT
+            .lock()
+            .unwrap()
+            .contains_key(self.name.token_literal().unwrap().as_str())
+        {
+            println!("HAS THE KEY ALREADY!");
+        } else {
+            // ENVIRONMENT.lock().unwrap()[self.name.token_literal().unwrap().as_str()] =
+            //     self.value.eval().unwrap();
+            println!("MISSING KEY!");
+        }
         return None;
     }
 }
@@ -1399,9 +1411,9 @@ mod tests {
             ("5; return 10; 15;", 10),
             ("return 15; 19 + 15; 5 == 5;", 15),
             ("10 == 10; 10 != 11; return 1;", 1),
+            ("let a = 10; a;", 10),
         ];
         for test_input in test_inputs {
-            println!("{:?}", test_input.0);
             test_eval_integer(test_input);
         }
     }
@@ -1440,6 +1452,7 @@ mod tests {
             ("(2 > 1) == true", true),
             ("(2 == 2) == true", true),
             ("(2 < 1) == false", true),
+            ("let b = true; b;", true),
         ];
         for test_input in test_inputs {
             test_eval_boolean(test_input);
@@ -1483,6 +1496,7 @@ mod tests {
             ("-true", "unknown operator: -BOOLEAN"),
             ("-(5 + true)", "type mismatch: INTEGER + BOOLEAN"),
             ("if (5 + true) { x }", "type mismatch: INTEGER + BOOLEAN"),
+            ("foobar;", "identifier not found: foobar"),
         ];
 
         for test_input in test_inputs {

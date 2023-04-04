@@ -1,5 +1,4 @@
 extern crate downcast_rs;
-
 use downcast_rs::{impl_downcast, Downcast};
 
 #[derive(Debug, Eq, PartialEq)]
