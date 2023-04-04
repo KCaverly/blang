@@ -1,11 +1,35 @@
 use crate::types::Object;
-use std::{collections::HashMap, sync::Mutex};
+use std::collections::HashMap;
 
-use lazy_static::lazy_static;
+pub struct Environment {
+    store: HashMap<String, Box<dyn Object>>,
+}
 
-lazy_static! {
-    pub static ref ENVIRONMENT: Mutex<HashMap<&'static str, Box<dyn Object + Send>>> = {
-        let hm: HashMap<&'static str, Box<dyn Object + Send>> = HashMap::new();
-        Mutex::new(hm)
-    };
+impl Environment {
+    pub fn new() -> Environment {
+        return Environment {
+            store: HashMap::new(),
+        };
+    }
+
+    pub fn update(&mut self, key: String, value: Box<dyn Object>) {
+        self.store.insert(key, value);
+    }
+
+    pub fn list_keys(&self) -> Vec<&String> {
+        return Vec::from_iter(self.store.keys());
+    }
+
+    pub fn has_key(&self, key: &str) -> bool {
+        return self.store.contains_key(key);
+    }
+
+    pub fn get(&self, key: &str) -> Option<Box<dyn Object>> {
+        let obj = self.store.get(key);
+        println!("{:?}", obj.unwrap().inspect());
+        if obj.is_none() {
+            return None;
+        }
+        return Some(obj.unwrap().get_box());
+    }
 }

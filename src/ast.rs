@@ -1,21 +1,19 @@
 extern crate downcast_rs;
 extern crate lazy_static;
 
-use crate::environment::ENVIRONMENT;
+use crate::environment::Environment;
 use crate::lexer::Lexer;
+use crate::program::{Program, ProgramNode};
+use crate::statements::{
+    BlockStatement, BooleanExpression, CallExpression, ExpressionStatement,
+    FunctionLiteralExpression, IdentifierExpression, IfExpression, InfixExpression,
+    IntegerLiteralExpression, LetStatement, PrefixExpression, ReturnStatement,
+};
 use crate::token::{Token, TokenType};
 use crate::types::{Boolean, Error, Integer, Object, Type};
 use downcast_rs::{impl_downcast, Downcast};
 use lazy_static::lazy_static;
 use std::collections::HashMap;
-
-pub trait Node: Downcast {
-    fn token_literal(&self) -> Option<String>;
-    fn to_string(&self) -> String;
-    fn eval(&self) -> Option<Box<dyn Object>>;
-}
-
-impl_downcast!(Node);
 
 ////////////
 // Helper //
@@ -30,478 +28,467 @@ fn is_error(object: Option<&Box<dyn Object>>) -> bool {
     return false;
 }
 
-/////////////
-// Program //
-/////////////
-
-pub struct Program {
-    pub statements: Vec<Box<dyn Node>>,
-}
-
-impl Node for Program {
-    fn token_literal(&self) -> Option<String> {
-        if self.statements.len() > 0 {
-            return self.statements[0].token_literal();
-        } else {
-            return None;
-        }
-    }
-
-    fn to_string(&self) -> String {
-        let mut str: Vec<String> = Vec::new();
-        for statement in &self.statements {
-            str.push(statement.to_string());
-        }
-        return str.join(" ");
-    }
-
-    fn eval(&self) -> Option<Box<dyn Object>> {
-        let mut result: Option<Box<dyn Object>> = None;
-        for statement in &self.statements {
-            result = statement.eval();
-
-            if statement.as_ref().token_literal().unwrap() == "return" {
-                break;
-            }
-
-            if result.as_ref().unwrap().type_() == Type::ERROR {
-                break;
-            }
-        }
-        return result;
-    }
-}
-
-///////////////
-// Statement //
-///////////////
-
-struct LetStatement {
-    token: Token,
-    name: IdentifierExpression,
-    value: Box<dyn Node>,
-}
-
-impl Node for LetStatement {
-    fn token_literal(&self) -> Option<String> {
-        return self.token.literal.to_owned();
-    }
-
-    fn to_string(&self) -> String {
-        return format!(
-            "{} {} = {}",
-            self.token_literal().unwrap(),
-            self.name.to_string(),
-            self.value.to_string()
-        )
-        .to_string();
-    }
-
-    fn eval(&self) -> Option<Box<dyn Object>> {
-        if ENVIRONMENT
-            .lock()
-            .unwrap()
-            .contains_key(self.name.token_literal().unwrap().as_str())
-        {
-            println!("HAS THE KEY ALREADY!");
-        } else {
-            // ENVIRONMENT.lock().unwrap()[self.name.token_literal().unwrap().as_str()] =
-            //     self.value.eval().unwrap();
-            println!("MISSING KEY!");
-        }
-        return None;
-    }
-}
-
-struct ReturnStatement {
-    token: Token,
-    value: Box<dyn Node>,
-}
-
-impl Node for ReturnStatement {
-    fn token_literal(&self) -> Option<String> {
-        return self.token.literal.to_owned();
-    }
-
-    fn to_string(&self) -> String {
-        return format!(
-            "{} {};",
-            self.token_literal().unwrap(),
-            self.value.to_string()
-        );
-    }
-
-    fn eval(&self) -> Option<Box<dyn Object>> {
-        return self.value.eval();
-    }
-}
-
-struct ExpressionStatement {
-    token: Token,
-    expression: Box<dyn Node>,
-}
-
-impl Node for ExpressionStatement {
-    fn token_literal(&self) -> Option<String> {
-        return self.token.literal.to_owned();
-    }
-    fn to_string(&self) -> String {
-        return self.expression.to_string();
-    }
-    fn eval(&self) -> Option<Box<dyn Object>> {
-        return self.expression.eval();
-    }
-}
-
-struct BlockStatement {
-    token: Token,
-    statements: Vec<Box<dyn Node>>,
-}
-
-impl Node for BlockStatement {
-    fn token_literal(&self) -> Option<String> {
-        return self.token.literal.to_owned();
-    }
-    fn to_string(&self) -> String {
-        let mut str: Vec<String> = Vec::new();
-        for statement in &self.statements {
-            str.push(format!("{};", statement.to_string()));
-        }
-        return str.join(" ");
-    }
-    fn eval(&self) -> Option<Box<dyn Object>> {
-        let mut result: Option<Box<dyn Object>> = None;
-        for statement in &self.statements {
-            result = statement.eval();
-            if statement.as_ref().token_literal().unwrap() == "return" {
-                break;
-            }
-
-            if result.as_ref().unwrap().type_() == Type::ERROR {
-                break;
-            }
-        }
-        return result;
-    }
-}
-
-////////////////
-// Expression //
-////////////////
-
-struct IdentifierExpression {
-    token: Token,
-    value: String,
-}
-
-impl Node for IdentifierExpression {
-    fn token_literal(&self) -> Option<String> {
-        return self.token.literal.to_owned();
-    }
-    fn to_string(&self) -> String {
-        return self.value.clone();
-    }
-    fn eval(&self) -> Option<Box<dyn Object>> {
-        return None;
-    }
-}
-
-struct IntegerLiteralExpression {
-    token: Token,
-    value: i64,
-}
-
-impl Node for IntegerLiteralExpression {
-    fn token_literal(&self) -> Option<String> {
-        return self.token.literal.to_owned();
-    }
-    fn to_string(&self) -> String {
-        return self.value.clone().to_string();
-    }
-    fn eval(&self) -> Option<Box<dyn Object>> {
-        return Some(Box::new(Integer { value: self.value }));
-    }
-}
-
-struct BooleanExpression {
-    token: Token,
-    value: bool,
-}
-
-impl Node for BooleanExpression {
-    fn token_literal(&self) -> Option<String> {
-        return self.token.literal.to_owned();
-    }
-    fn to_string(&self) -> String {
-        return self.value.to_string();
-    }
-    fn eval(&self) -> Option<Box<dyn Object>> {
-        return Some(Box::new(Boolean { value: self.value }));
-    }
-}
-
-struct PrefixExpression {
-    token: Token,
-    operator: String,
-    right: Box<dyn Node>,
-}
-
-impl Node for PrefixExpression {
-    fn token_literal(&self) -> Option<String> {
-        return self.token.literal.to_owned();
-    }
-    fn to_string(&self) -> String {
-        return format!("({}{})", self.operator, self.right.to_string());
-    }
-    fn eval(&self) -> Option<Box<dyn Object>> {
-        let right_eval = self.right.eval();
-        let right_result = right_eval.as_ref().unwrap();
-        if is_error(right_eval.as_ref()) {
-            return right_eval;
-        }
-        let right_type = right_result.type_();
-
-        let op = self.operator.as_str();
-        match op {
-            "!" => {
-                let res: bool;
-                if right_type == Type::BOOLEAN {
-                    if right_result.downcast_ref::<Boolean>().unwrap().value {
-                        res = false;
-                    } else {
-                        res = true;
-                    }
-                } else if right_type == Type::NULL {
-                    res = false;
-                } else {
-                    res = false;
-                }
-                return Some(Box::new(Boolean { value: res }));
-            }
-            "-" => {
-                if right_type == Type::INTEGER {
-                    let val = right_result.downcast_ref::<Integer>().unwrap().value;
-                    return Some(Box::new(Integer { value: -val }));
-                } else {
-                    return Some(Box::new(Error {
-                        message: format!("unknown operator: -{:?}", right_type),
-                    }));
-                }
-            }
-            _ => {
-                // I think this error may be impossible given upstream calls...
-                return Some(Box::new(Error {
-                    message: format!("unknown operator: {:?}", op),
-                }));
-            }
-        };
-    }
-}
-
-struct InfixExpression {
-    token: Token,
-    left: Box<dyn Node>,
-    operator: String,
-    right: Box<dyn Node>,
-}
-
-impl Node for InfixExpression {
-    fn token_literal(&self) -> Option<String> {
-        return self.token.literal.to_owned();
-    }
-    fn to_string(&self) -> String {
-        return format!(
-            "({} {} {})",
-            self.left.to_string(),
-            self.operator,
-            self.right.to_string()
-        );
-    }
-    fn eval(&self) -> Option<Box<dyn Object>> {
-        // Check left
-        let left_eval = self.left.eval();
-
-        if is_error(left_eval.as_ref()) {
-            return left_eval;
-        }
-        let left_result = left_eval.unwrap();
-
-        // Check right
-        let right_eval = self.right.eval();
-        if is_error(right_eval.as_ref()) {
-            return right_eval;
-        }
-        let right_result = right_eval.unwrap();
-
-        if left_result.type_() == Type::INTEGER && right_result.type_() == Type::INTEGER {
-            let left_int = left_result.downcast_ref::<Integer>().unwrap();
-            let right_int = right_result.downcast_ref::<Integer>().unwrap();
-
-            let res: Option<Box<dyn Object>> = match self.operator.as_str() {
-                "-" => Some(Box::new(Integer {
-                    value: left_int.value - right_int.value,
-                })),
-                "+" => Some(Box::new(Integer {
-                    value: left_int.value + right_int.value,
-                })),
-                "/" => Some(Box::new(Integer {
-                    value: left_int.value / right_int.value,
-                })),
-                "*" => Some(Box::new(Integer {
-                    value: left_int.value * right_int.value,
-                })),
-                ">" => Some(Box::new(Boolean {
-                    value: left_int.value > right_int.value,
-                })),
-                "<" => Some(Box::new(Boolean {
-                    value: left_int.value < right_int.value,
-                })),
-                "==" => Some(Box::new(Boolean {
-                    value: left_int.value == right_int.value,
-                })),
-                "!=" => Some(Box::new(Boolean {
-                    value: left_int.value != right_int.value,
-                })),
-                _ => None,
-            };
-            return res;
-        } else if left_result.type_() == Type::BOOLEAN && right_result.type_() == Type::BOOLEAN {
-            let left_bool = left_result.downcast_ref::<Boolean>().unwrap();
-            let right_bool = right_result.downcast_ref::<Boolean>().unwrap();
-
-            let res: Option<Box<dyn Object>> = match self.operator.as_str() {
-                "==" => Some(Box::new(Boolean {
-                    value: left_bool.value == right_bool.value,
-                })),
-                "!=" => Some(Box::new(Boolean {
-                    value: left_bool.value != right_bool.value,
-                })),
-                _ => None,
-            };
-            return res;
-        } else {
-            return Some(Box::new(Error {
-                message: format!(
-                    "type mismatch: {:?} {} {:?}",
-                    left_result.type_(),
-                    self.operator.as_str(),
-                    right_result.type_()
-                ),
-            }));
-        }
-    }
-}
-
-struct IfExpression {
-    token: Token,
-    condition: Box<dyn Node>,
-    consequence: Box<dyn Node>,
-    alternative: Option<Box<dyn Node>>,
-}
-
-impl Node for IfExpression {
-    fn token_literal(&self) -> Option<String> {
-        return self.token.literal.to_owned();
-    }
-    fn to_string(&self) -> String {
-        if self.alternative.is_some() {
-            let alt = self.alternative.as_ref().unwrap();
-            return format!(
-                "if {} {} else {}",
-                self.condition.to_string(),
-                self.consequence.to_string(),
-                alt.to_string()
-            );
-        } else {
-            return format!(
-                "if {} {}",
-                self.condition.to_string(),
-                self.consequence.to_string()
-            );
-        }
-    }
-    fn eval(&self) -> Option<Box<dyn Object>> {
-        let condition_result = self.condition.eval();
-        if is_error(condition_result.as_ref()) {
-            return condition_result;
-        }
-        let use_first: bool;
-        if condition_result.is_some() {
-            let unwrapped = condition_result.unwrap();
-            if &unwrapped.type_() == &Type::BOOLEAN {
-                use_first = unwrapped.downcast_ref::<Boolean>().unwrap().value;
-            } else {
-                use_first = true;
-            }
-        } else {
-            use_first = false;
-        }
-
-        if use_first {
-            let res = self.consequence.eval();
-            return res;
-        } else if self.alternative.is_some() {
-            let unwrapped = self.alternative.as_ref().unwrap();
-            return unwrapped.eval();
-        } else {
-            return None;
-        }
-    }
-}
-
-struct FunctionLiteralExpression {
-    token: Token,
-    parameters: Vec<IdentifierExpression>,
-    body: Box<dyn Node>,
-}
-
-impl Node for FunctionLiteralExpression {
-    fn token_literal(&self) -> Option<String> {
-        return self.token.literal.clone();
-    }
-    fn to_string(&self) -> String {
-        return format!(
-            "fn({}) {{ {} }}",
-            self.parameters
-                .iter()
-                .map(|x| x.to_string())
-                .collect::<Vec<String>>()
-                .join(", "),
-            self.body.to_string()
-        );
-    }
-    fn eval(&self) -> Option<Box<dyn Object>> {
-        return None;
-    }
-}
-
-struct CallExpression {
-    token: Token,
-    function: Box<dyn Node>,
-    arguments: Vec<Box<dyn Node>>,
-}
-
-impl Node for CallExpression {
-    fn token_literal(&self) -> Option<String> {
-        return self.token.literal.clone();
-    }
-    fn to_string(&self) -> String {
-        return format!(
-            "{}({})",
-            self.function.to_string(),
-            self.arguments
-                .iter()
-                .map(|x| x.to_string())
-                .collect::<Vec<String>>()
-                .join(", ")
-        );
-    }
-
-    fn eval(&self) -> Option<Box<dyn Object>> {
-        return None;
-    }
-}
-
+// /////////////
+// // Program //
+// /////////////
+//
+// pub struct Program {
+//     pub statements: Vec<Box<dyn Node>>,
+// }
+//
+// impl Node for Program {
+//     fn token_literal(&self) -> Option<String> {
+//         if self.statements.len() > 0 {
+//             return self.statements[0].token_literal();
+//         } else {
+//             return None;
+//         }
+//     }
+//
+//     fn to_string(&self) -> String {
+//         let mut str: Vec<String> = Vec::new();
+//         for statement in &self.statements {
+//             str.push(statement.to_string());
+//         }
+//         return str.join(" ");
+//     }
+//
+//     fn eval(&self) -> Option<Box<dyn Object>> {
+//         let mut result: Option<Box<dyn Object>> = None;
+//         for statement in &self.statements {
+//             result = statement.eval();
+//
+//             if statement.as_ref().token_literal().unwrap() == "return" {
+//                 break;
+//             }
+//
+//             if result.as_ref().unwrap().type_() == Type::ERROR {
+//                 break;
+//             }
+//         }
+//         return result;
+//     }
+// }
+//
+// ///////////////
+// // Statement //
+// ///////////////
+//
+// struct LetStatement {
+//     token: Token,
+//     name: IdentifierExpression,
+//     value: Box<dyn Node>,
+// }
+//
+// impl Node for LetStatement {
+//     fn token_literal(&self) -> Option<String> {
+//         return self.token.literal.to_owned();
+//     }
+//
+//     fn to_string(&self) -> String {
+//         return format!(
+//             "{} {} = {}",
+//             self.token_literal().unwrap(),
+//             self.name.to_string(),
+//             self.value.to_string()
+//         )
+//         .to_string();
+//     }
+//
+//     fn eval(&self) -> Option<Box<dyn Object>> {
+//         return None;
+//     }
+// }
+//
+// struct ReturnStatement {
+//     token: Token,
+//     value: Box<dyn Node>,
+// }
+//
+// impl Node for ReturnStatement {
+//     fn token_literal(&self) -> Option<String> {
+//         return self.token.literal.to_owned();
+//     }
+//
+//     fn to_string(&self) -> String {
+//         return format!(
+//             "{} {};",
+//             self.token_literal().unwrap(),
+//             self.value.to_string()
+//         );
+//     }
+//
+//     fn eval(&self) -> Option<Box<dyn Object>> {
+//         return self.value.eval();
+//     }
+// }
+//
+// struct ExpressionStatement {
+//     token: Token,
+//     expression: Box<dyn Node>,
+// }
+//
+// impl Node for ExpressionStatement {
+//     fn token_literal(&self) -> Option<String> {
+//         return self.token.literal.to_owned();
+//     }
+//     fn to_string(&self) -> String {
+//         return self.expression.to_string();
+//     }
+//     fn eval(&self) -> Option<Box<dyn Object>> {
+//         return self.expression.eval();
+//     }
+// }
+//
+// struct BlockStatement {
+//     token: Token,
+//     statements: Vec<Box<dyn Node>>,
+// }
+//
+// impl Node for BlockStatement {
+//     fn token_literal(&self) -> Option<String> {
+//         return self.token.literal.to_owned();
+//     }
+//     fn to_string(&self) -> String {
+//         let mut str: Vec<String> = Vec::new();
+//         for statement in &self.statements {
+//             str.push(format!("{};", statement.to_string()));
+//         }
+//         return str.join(" ");
+//     }
+//     fn eval(&self) -> Option<Box<dyn Object>> {
+//         let mut result: Option<Box<dyn Object>> = None;
+//         for statement in &self.statements {
+//             result = statement.eval();
+//             if statement.as_ref().token_literal().unwrap() == "return" {
+//                 break;
+//             }
+//
+//             if result.as_ref().unwrap().type_() == Type::ERROR {
+//                 break;
+//             }
+//         }
+//         return result;
+//     }
+// }
+//
+// ////////////////
+// // Expression //
+// ////////////////
+//
+// struct IdentifierExpression {
+//     token: Token,
+//     value: String,
+// }
+//
+// impl Node for IdentifierExpression {
+//     fn token_literal(&self) -> Option<String> {
+//         return self.token.literal.to_owned();
+//     }
+//     fn to_string(&self) -> String {
+//         return self.value.clone();
+//     }
+//     fn eval(&self) -> Option<Box<dyn Object>> {
+//         return None;
+//     }
+// }
+//
+// struct IntegerLiteralExpression {
+//     token: Token,
+//     value: i64,
+// }
+//
+// impl Node for IntegerLiteralExpression {
+//     fn token_literal(&self) -> Option<String> {
+//         return self.token.literal.to_owned();
+//     }
+//     fn to_string(&self) -> String {
+//         return self.value.clone().to_string();
+//     }
+//     fn eval(&self) -> Option<Box<dyn Object>> {
+//         return Some(Box::new(Integer { value: self.value }));
+//     }
+// }
+//
+// struct BooleanExpression {
+//     token: Token,
+//     value: bool,
+// }
+//
+// impl Node for BooleanExpression {
+//     fn token_literal(&self) -> Option<String> {
+//         return self.token.literal.to_owned();
+//     }
+//     fn to_string(&self) -> String {
+//         return self.value.to_string();
+//     }
+//     fn eval(&self) -> Option<Box<dyn Object>> {
+//         return Some(Box::new(Boolean { value: self.value }));
+//     }
+// }
+//
+// struct PrefixExpression {
+//     token: Token,
+//     operator: String,
+//     right: Box<dyn Node>,
+// }
+//
+// impl Node for PrefixExpression {
+//     fn token_literal(&self) -> Option<String> {
+//         return self.token.literal.to_owned();
+//     }
+//     fn to_string(&self) -> String {
+//         return format!("({}{})", self.operator, self.right.to_string());
+//     }
+//     fn eval(&self) -> Option<Box<dyn Object>> {
+//         let right_eval = self.right.eval();
+//         let right_result = right_eval.as_ref().unwrap();
+//         if is_error(right_eval.as_ref()) {
+//             return right_eval;
+//         }
+//         let right_type = right_result.type_();
+//
+//         let op = self.operator.as_str();
+//         match op {
+//             "!" => {
+//                 let res: bool;
+//                 if right_type == Type::BOOLEAN {
+//                     if right_result.downcast_ref::<Boolean>().unwrap().value {
+//                         res = false;
+//                     } else {
+//                         res = true;
+//                     }
+//                 } else if right_type == Type::NULL {
+//                     res = false;
+//                 } else {
+//                     res = false;
+//                 }
+//                 return Some(Box::new(Boolean { value: res }));
+//             }
+//             "-" => {
+//                 if right_type == Type::INTEGER {
+//                     let val = right_result.downcast_ref::<Integer>().unwrap().value;
+//                     return Some(Box::new(Integer { value: -val }));
+//                 } else {
+//                     return Some(Box::new(Error {
+//                         message: format!("unknown operator: -{:?}", right_type),
+//                     }));
+//                 }
+//             }
+//             _ => {
+//                 // I think this error may be impossible given upstream calls...
+//                 return Some(Box::new(Error {
+//                     message: format!("unknown operator: {:?}", op),
+//                 }));
+//             }
+//         };
+//     }
+// }
+//
+// struct InfixExpression {
+//     token: Token,
+//     left: Box<dyn Node>,
+//     operator: String,
+//     right: Box<dyn Node>,
+// }
+//
+// impl Node for InfixExpression {
+//     fn token_literal(&self) -> Option<String> {
+//         return self.token.literal.to_owned();
+//     }
+//     fn to_string(&self) -> String {
+//         return format!(
+//             "({} {} {})",
+//             self.left.to_string(),
+//             self.operator,
+//             self.right.to_string()
+//         );
+//     }
+//     fn eval(&self) -> Option<Box<dyn Object>> {
+//         // Check left
+//         let left_eval = self.left.eval();
+//
+//         if is_error(left_eval.as_ref()) {
+//             return left_eval;
+//         }
+//         let left_result = left_eval.unwrap();
+//
+//         // Check right
+//         let right_eval = self.right.eval();
+//         if is_error(right_eval.as_ref()) {
+//             return right_eval;
+//         }
+//         let right_result = right_eval.unwrap();
+//
+//         if left_result.type_() == Type::INTEGER && right_result.type_() == Type::INTEGER {
+//             let left_int = left_result.downcast_ref::<Integer>().unwrap();
+//             let right_int = right_result.downcast_ref::<Integer>().unwrap();
+//
+//             let res: Option<Box<dyn Object>> = match self.operator.as_str() {
+//                 "-" => Some(Box::new(Integer {
+//                     value: left_int.value - right_int.value,
+//                 })),
+//                 "+" => Some(Box::new(Integer {
+//                     value: left_int.value + right_int.value,
+//                 })),
+//                 "/" => Some(Box::new(Integer {
+//                     value: left_int.value / right_int.value,
+//                 })),
+//                 "*" => Some(Box::new(Integer {
+//                     value: left_int.value * right_int.value,
+//                 })),
+//                 ">" => Some(Box::new(Boolean {
+//                     value: left_int.value > right_int.value,
+//                 })),
+//                 "<" => Some(Box::new(Boolean {
+//                     value: left_int.value < right_int.value,
+//                 })),
+//                 "==" => Some(Box::new(Boolean {
+//                     value: left_int.value == right_int.value,
+//                 })),
+//                 "!=" => Some(Box::new(Boolean {
+//                     value: left_int.value != right_int.value,
+//                 })),
+//                 _ => None,
+//             };
+//             return res;
+//         } else if left_result.type_() == Type::BOOLEAN && right_result.type_() == Type::BOOLEAN {
+//             let left_bool = left_result.downcast_ref::<Boolean>().unwrap();
+//             let right_bool = right_result.downcast_ref::<Boolean>().unwrap();
+//
+//             let res: Option<Box<dyn Object>> = match self.operator.as_str() {
+//                 "==" => Some(Box::new(Boolean {
+//                     value: left_bool.value == right_bool.value,
+//                 })),
+//                 "!=" => Some(Box::new(Boolean {
+//                     value: left_bool.value != right_bool.value,
+//                 })),
+//                 _ => None,
+//             };
+//             return res;
+//         } else {
+//             return Some(Box::new(Error {
+//                 message: format!(
+//                     "type mismatch: {:?} {} {:?}",
+//                     left_result.type_(),
+//                     self.operator.as_str(),
+//                     right_result.type_()
+//                 ),
+//             }));
+//         }
+//     }
+// }
+//
+// struct IfExpression {
+//     token: Token,
+//     condition: Box<dyn Node>,
+//     consequence: Box<dyn Node>,
+//     alternative: Option<Box<dyn Node>>,
+// }
+//
+// impl Node for IfExpression {
+//     fn token_literal(&self) -> Option<String> {
+//         return self.token.literal.to_owned();
+//     }
+//     fn to_string(&self) -> String {
+//         if self.alternative.is_some() {
+//             let alt = self.alternative.as_ref().unwrap();
+//             return format!(
+//                 "if {} {} else {}",
+//                 self.condition.to_string(),
+//                 self.consequence.to_string(),
+//                 alt.to_string()
+//             );
+//         } else {
+//             return format!(
+//                 "if {} {}",
+//                 self.condition.to_string(),
+//                 self.consequence.to_string()
+//             );
+//         }
+//     }
+//     fn eval(&self) -> Option<Box<dyn Object>> {
+//         let condition_result = self.condition.eval();
+//         if is_error(condition_result.as_ref()) {
+//             return condition_result;
+//         }
+//         let use_first: bool;
+//         if condition_result.is_some() {
+//             let unwrapped = condition_result.unwrap();
+//             if &unwrapped.type_() == &Type::BOOLEAN {
+//                 use_first = unwrapped.downcast_ref::<Boolean>().unwrap().value;
+//             } else {
+//                 use_first = true;
+//             }
+//         } else {
+//             use_first = false;
+//         }
+//
+//         if use_first {
+//             let res = self.consequence.eval();
+//             return res;
+//         } else if self.alternative.is_some() {
+//             let unwrapped = self.alternative.as_ref().unwrap();
+//             return unwrapped.eval();
+//         } else {
+//             return None;
+//         }
+//     }
+// }
+//
+// struct FunctionLiteralExpression {
+//     token: Token,
+//     parameters: Vec<IdentifierExpression>,
+//     body: Box<dyn Node>,
+// }
+//
+// impl Node for FunctionLiteralExpression {
+//     fn token_literal(&self) -> Option<String> {
+//         return self.token.literal.clone();
+//     }
+//     fn to_string(&self) -> String {
+//         return format!(
+//             "fn({}) {{ {} }}",
+//             self.parameters
+//                 .iter()
+//                 .map(|x| x.to_string())
+//                 .collect::<Vec<String>>()
+//                 .join(", "),
+//             self.body.to_string()
+//         );
+//     }
+//     fn eval(&self) -> Option<Box<dyn Object>> {
+//         return None;
+//     }
+// }
+//
+// struct CallExpression {
+//     token: Token,
+//     function: Box<dyn Node>,
+//     arguments: Vec<Box<dyn Node>>,
+// }
+//
+// impl Node for CallExpression {
+//     fn token_literal(&self) -> Option<String> {
+//         return self.token.literal.clone();
+//     }
+//     fn to_string(&self) -> String {
+//         return format!(
+//             "{}({})",
+//             self.function.to_string(),
+//             self.arguments
+//                 .iter()
+//                 .map(|x| x.to_string())
+//                 .collect::<Vec<String>>()
+//                 .join(", ")
+//         );
+//     }
+//
+//     fn eval(&self) -> Option<Box<dyn Object>> {
+//         return None;
+//     }
+// }
+//
 //////////////////
 // Precendences //
 //////////////////
@@ -603,25 +590,24 @@ impl Parser {
         return PrecedenceType::LOWEST;
     }
 
-    pub fn parse(&mut self) -> Program {
-        // Create Blank Program to Start
-        let mut program = Program { statements: vec![] };
+    pub fn parse(&mut self) -> Vec<Box<dyn ProgramNode>> {
+        let mut statements: Vec<Box<dyn ProgramNode>> = vec![];
 
         // Iterate through all token in the Lexer
         // TODO: We have to handle semicolons at some point
         while !self.current_token_is(&TokenType::EOF) {
             if !self.current_token_is(&TokenType::SEMICOLON) {
                 let statement = self.parse_statement();
-                program.statements.push(statement);
+                statements.push(statement);
             }
 
             self.next_token();
         }
 
-        return program;
+        return statements;
     }
 
-    fn parse_statement(&mut self) -> Box<dyn Node> {
+    fn parse_statement(&mut self) -> Box<dyn ProgramNode> {
         let token_type = self.current_token.token_type;
         let statement = match token_type {
             TokenType::LET => self.parse_let_statement(),
@@ -641,7 +627,7 @@ impl Parser {
         return statement;
     }
 
-    fn parse_let_statement(&mut self) -> Box<dyn Node> {
+    fn parse_let_statement(&mut self) -> Box<dyn ProgramNode> {
         let og_token = self.current_token.clone();
 
         if !self.expect_peek(&TokenType::IDENT) {
@@ -659,31 +645,28 @@ impl Parser {
             self.next_token();
         }
 
-        return Box::new(LetStatement {
-            token: og_token,
+        return Box::new(LetStatement::new(
+            og_token,
             name,
-            value: self.parse_expression(PrecedenceType::LOWEST),
-        });
+            self.parse_expression(PrecedenceType::LOWEST),
+        ));
     }
-    fn parse_return_statement(&mut self) -> Box<dyn Node> {
+    fn parse_return_statement(&mut self) -> Box<dyn ProgramNode> {
         let og_token = self.current_token.clone();
         self.next_token();
 
-        return Box::new(ReturnStatement {
-            token: og_token,
-            value: self.parse_expression(PrecedenceType::LOWEST),
-        });
+        return Box::new(ReturnStatement::new(
+            og_token,
+            self.parse_expression(PrecedenceType::LOWEST),
+        ));
     }
 
-    fn parse_expression_statement(&mut self) -> Box<dyn Node> {
+    fn parse_expression_statement(&mut self) -> Box<dyn ProgramNode> {
         let expr = self.parse_expression(PrecedenceType::LOWEST);
-        return Box::new(ExpressionStatement {
-            token: self.current_token.clone(),
-            expression: expr,
-        });
+        return Box::new(ExpressionStatement::new(self.current_token.clone(), expr));
     }
 
-    fn parse_block_statement(&mut self) -> Box<dyn Node> {
+    fn parse_block_statement(&mut self) -> Box<dyn ProgramNode> {
         let og_token = self.current_token.clone();
         let mut statements = vec![];
 
@@ -698,13 +681,10 @@ impl Parser {
             self.next_token();
         }
 
-        return Box::new(BlockStatement {
-            token: og_token,
-            statements,
-        });
+        return Box::new(BlockStatement::new(og_token, statements));
     }
 
-    fn parse_expression(&mut self, precedence: PrecedenceType) -> Box<dyn Node> {
+    fn parse_expression(&mut self, precedence: PrecedenceType) -> Box<dyn ProgramNode> {
         let token_type = self.current_token.token_type;
 
         // Parse Left Side of Expression
@@ -748,65 +728,61 @@ impl Parser {
         }
     }
 
-    fn parse_integer_expression(&mut self) -> Box<dyn Node> {
-        let expr = Box::new(IntegerLiteralExpression {
-            token: self.current_token.clone(),
-            value: self
-                .current_token
+    fn parse_integer_expression(&mut self) -> Box<dyn ProgramNode> {
+        return Box::new(IntegerLiteralExpression::new(
+            self.current_token.clone(),
+            self.current_token
                 .clone()
                 .literal
                 .unwrap()
                 .parse::<i64>()
                 .unwrap(),
-        });
-        return expr;
-    }
-    fn parse_identifier_expression(&mut self) -> Box<dyn Node> {
-        let expr = Box::new(IdentifierExpression {
-            token: self.current_token.clone(),
-            value: self.current_token.clone().literal.unwrap(),
-        });
-        return expr;
+        ));
     }
 
-    fn parse_boolean_expression(&mut self) -> Box<dyn Node> {
-        let expr = Box::new(BooleanExpression {
-            token: self.current_token.clone(),
-            value: self
-                .current_token
+    fn parse_identifier_expression(&mut self) -> Box<dyn ProgramNode> {
+        return Box::new(IdentifierExpression::new(
+            self.current_token.clone(),
+            self.current_token.clone().literal.unwrap(),
+        ));
+    }
+
+    fn parse_boolean_expression(&mut self) -> Box<dyn ProgramNode> {
+        return Box::new(BooleanExpression::new(
+            self.current_token.clone(),
+            self.current_token
                 .clone()
                 .literal
                 .unwrap()
                 .parse::<bool>()
                 .unwrap(),
-        });
-        return expr;
+        ));
     }
 
-    fn parse_prefix_expression(&mut self) -> Box<dyn Node> {
+    fn parse_prefix_expression(&mut self) -> Box<dyn ProgramNode> {
         let og_token = self.current_token.clone();
         self.next_token();
 
-        return Box::new(PrefixExpression {
-            token: og_token.clone(),
-            operator: og_token.literal.clone().unwrap(),
-            right: self.parse_expression(PrecedenceType::PREFIX),
-        });
+        return Box::new(PrefixExpression::new(
+            og_token.clone(),
+            og_token.literal.clone().unwrap(),
+            self.parse_expression(PrecedenceType::PREFIX),
+        ));
     }
-    fn parse_infix_expression(&mut self, left: Box<dyn Node>) -> Box<dyn Node> {
+    fn parse_infix_expression(&mut self, left: Box<dyn ProgramNode>) -> Box<dyn ProgramNode> {
         let og_token = self.current_token.clone();
 
         let precedence = PRECEDENCE_MAP[&og_token.token_type];
         self.next_token();
-        return Box::new(InfixExpression {
-            token: og_token.clone(),
+        return Box::new(InfixExpression::new(
+            og_token.clone(),
             left,
-            operator: og_token.clone().literal.unwrap(),
-            right: self.parse_expression(precedence),
-        });
+            og_token.clone().literal.unwrap(),
+            self.parse_expression(precedence),
+        ));
     }
 
-    fn parse_grouped_expression(&mut self) -> Box<dyn Node> {
+    fn parse_grouped_expression(&mut self) -> Box<dyn ProgramNode> {
         self.next_token();
 
         let expr = self.parse_expression(PrecedenceType::LOWEST);
@@ -817,7 +793,7 @@ impl Parser {
         return expr;
     }
 
-    fn parse_if_expression(&mut self) -> Box<dyn Node> {
+    fn parse_if_expression(&mut self) -> Box<dyn ProgramNode> {
         let og_token = self.current_token.clone();
         if !self.expect_peek(&TokenType::LPAREN) {
             panic!("INVALID!");
@@ -837,7 +813,7 @@ impl Parser {
 
         let consequence = self.parse_block_statement();
 
-        let alternative: Option<Box<dyn Node>>;
+        let alternative: Option<Box<dyn ProgramNode>>;
         if self.peek_token_is(&TokenType::ELSE) {
             self.next_token();
             if !self.expect_peek(&TokenType::LBRACE) {
@@ -848,15 +824,15 @@ impl Parser {
             alternative = None;
         }
 
-        return Box::new(IfExpression {
-            token: og_token,
+        return Box::new(IfExpression::new(
+            og_token,
             condition,
             consequence,
             alternative,
-        });
+        ));
     }
 
-    fn parse_function_expression(&mut self) -> Box<dyn Node> {
+    fn parse_function_expression(&mut self) -> Box<dyn ProgramNode> {
         let og_token = self.current_token.clone();
 
         if !self.expect_peek(&TokenType::LPAREN) {
@@ -871,11 +847,7 @@ impl Parser {
 
         let body = self.parse_block_statement();
 
-        return Box::new(FunctionLiteralExpression {
-            token: og_token,
-            parameters: params,
-            body,
-        });
+        return Box::new(FunctionLiteralExpression::new(og_token, params, body));
     }
 
     fn parse_function_parameters(&mut self) -> Vec<IdentifierExpression> {
@@ -910,18 +882,14 @@ impl Parser {
         return identifiers;
     }
 
-    fn parse_call_expression(&mut self, func: Box<dyn Node>) -> Box<dyn Node> {
+    fn parse_call_expression(&mut self, func: Box<dyn ProgramNode>) -> Box<dyn ProgramNode> {
         let og_token = self.current_token.clone();
         let arguments = self.parse_call_arguments();
 
-        return Box::new(CallExpression {
-            token: og_token,
-            function: func,
-            arguments,
-        });
+        return Box::new(CallExpression::new(og_token, func, arguments));
     }
 
-    fn parse_call_arguments(&mut self) -> Vec<Box<dyn Node>> {
+    fn parse_call_arguments(&mut self) -> Vec<Box<dyn ProgramNode>> {
         let mut args = vec![];
 
         if self.peek_token_is(&TokenType::RPAREN) {
@@ -959,7 +927,7 @@ mod tests {
         let lexer = Lexer::new(test_string.to_string());
         let mut parser = Parser::new(lexer);
 
-        let program = parser.parse();
+        let program = Program::new(parser.parse());
 
         assert!(
             program.statements.len() == 3,
@@ -1010,7 +978,7 @@ mod tests {
         let lexer = Lexer::new(test_string.to_string());
         let mut parser = Parser::new(lexer);
 
-        let program = parser.parse();
+        let program = Program::new(parser.parse());
 
         assert_eq!(parser.errors.len(), 0);
         assert_eq!(program.statements.len(), 3);
@@ -1027,7 +995,7 @@ mod tests {
         let lexer = Lexer::new(test_input.to_string());
         let mut parser = Parser::new(lexer);
 
-        let program = parser.parse();
+        let program = Program::new(parser.parse());
 
         assert_eq!(program.statements.len(), 2);
         assert_eq!(program.statements[0].token_literal().unwrap(), "5");
@@ -1050,7 +1018,7 @@ mod tests {
             let lexer = Lexer::new(test_input.to_string());
             let mut parser = Parser::new(lexer);
 
-            let program = parser.parse();
+            let program = Program::new(parser.parse());
 
             assert_eq!(program.statements.len(), 1);
         }
@@ -1072,7 +1040,7 @@ mod tests {
         for test_input in test_inputs {
             let lexer = Lexer::new(test_input.0.to_string());
             let mut parser = Parser::new(lexer);
-            let program = parser.parse();
+            let program = Program::new(parser.parse());
             assert_eq!(program.statements.len(), 1);
 
             assert_eq!(
@@ -1138,7 +1106,7 @@ mod tests {
         for test_input in test_inputs {
             let lexer = Lexer::new(test_input.0.to_string());
             let mut parser = Parser::new(lexer);
-            let program = parser.parse();
+            let program = Program::new(parser.parse());
             assert_eq!(program.statements.len(), 1);
 
             assert_eq!(
@@ -1163,7 +1131,7 @@ mod tests {
         for test_input in test_inputs {
             let lexer = Lexer::new(test_input.0.to_string());
             let mut parser = Parser::new(lexer);
-            let program = parser.parse();
+            let program = Program::new(parser.parse());
             assert_eq!(program.statements.len(), 1);
 
             assert_eq!(
@@ -1189,7 +1157,7 @@ mod tests {
         for test_input in test_inputs {
             let lexer = Lexer::new(test_input.0.to_string());
             let mut parser = Parser::new(lexer);
-            let program = parser.parse();
+            let program = Program::new(parser.parse());
             assert_eq!(program.statements.len(), 1);
 
             assert_eq!(
@@ -1208,7 +1176,7 @@ mod tests {
         for test_input in test_inputs {
             let lexer = Lexer::new(test_input.0.to_string());
             let mut parser = Parser::new(lexer);
-            let program = parser.parse();
+            let program = Program::new(parser.parse());
             assert_eq!(program.statements.len(), 1);
 
             assert_eq!(
@@ -1256,7 +1224,7 @@ mod tests {
         for test_input in test_inputs {
             let lexer = Lexer::new(test_input.0.to_string());
             let mut parser = Parser::new(lexer);
-            let program = parser.parse();
+            let program = Program::new(parser.parse());
             assert_eq!(program.statements.len(), 1);
             assert_eq!(
                 program.statements[0]
@@ -1322,7 +1290,7 @@ mod tests {
         for test_input in test_inputs {
             let lexer = Lexer::new(test_input.0.to_string());
             let mut parser = Parser::new(lexer);
-            let program = parser.parse();
+            let program = Program::new(parser.parse());
             assert_eq!(program.statements.len(), test_input.2);
             assert_eq!(program.statements[0].to_string(), test_input.1);
             assert_eq!(
@@ -1369,7 +1337,7 @@ mod tests {
         for test_input in test_inputs {
             let lexer = Lexer::new(test_input.0.to_string());
             let mut parser = Parser::new(lexer);
-            let program = parser.parse();
+            let program = Program::new(parser.parse());
             assert_eq!(program.statements.len(), test_input.2);
             assert_eq!(program.statements[0].to_string(), test_input.1);
             assert_eq!(
@@ -1421,7 +1389,7 @@ mod tests {
     fn test_eval_integer(test_input: (&str, i64)) {
         let lexer = Lexer::new(test_input.0.to_string());
         let mut parser = Parser::new(lexer);
-        let program = parser.parse();
+        let mut program = Program::new(parser.parse());
         let obj = program.eval();
         assert!(obj.is_some());
         let unwrapped = obj.unwrap();
@@ -1462,7 +1430,7 @@ mod tests {
     fn test_eval_boolean(test_input: (&str, bool)) {
         let lexer = Lexer::new(test_input.0.to_string());
         let mut parser = Parser::new(lexer);
-        let program = parser.parse();
+        let mut program = Program::new(parser.parse());
         let obj = program.eval();
         assert!(obj.is_some());
         let unwrapped = obj.unwrap();
@@ -1507,11 +1475,33 @@ mod tests {
     fn test_eval_error(test_input: (&str, &str)) {
         let lexer = Lexer::new(test_input.0.to_string());
         let mut parser = Parser::new(lexer);
-        let program = parser.parse();
+        let mut program = Program::new(parser.parse());
         let obj = program.eval();
         assert!(obj.is_some());
         let unwrapped = obj.unwrap();
 
         assert_eq!(unwrapped.inspect(), test_input.1);
+    }
+
+    #[test]
+    fn test_update_env() {
+        let test_inputs = vec![("let x = 5; x", "x", 5), ("10; let y = 15;", "y", 15)];
+        for test_input in test_inputs {
+            test_update_env_individual(test_input);
+        }
+    }
+
+    fn test_update_env_individual(test_input: (&str, &str, i64)) {
+        let lexer = Lexer::new(test_input.0.to_string());
+        let mut parser = Parser::new(lexer);
+        let mut program = Program::new(parser.parse());
+        program.eval();
+
+        assert!(program.environment.has_key(test_input.1));
+        let val = program.environment.get(test_input.1);
+        assert_eq!(
+            val.unwrap().downcast_ref::<Integer>().unwrap().value,
+            test_input.2
+        );
     }
 }
