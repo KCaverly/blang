@@ -30,6 +30,15 @@ impl REPL {
     // }
 
     pub fn run(&self) {
+        let text_logo = r#"___.   .__                         
+\_ |__ |  | _____    ____    ____  
+ | __ \|  | \__  \  /    \  / ___\ 
+ | \_\ \  |__/ __ \|   |  \/ /_/  >
+ |___  /____(____  /___|  /\___  / 
+     \/          \/     \//_____/  "#;
+        println!("");
+        println!("{}", text_logo);
+
         println!("\nWelcome to BLANG, An Interpreter for the Monkey Language written in Rust!\n");
         let mut program = Program::new(vec![]);
         loop {
