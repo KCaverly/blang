@@ -1489,6 +1489,7 @@ mod tests {
             ("let x = 5; x", "x", 5),
             ("10; let y = 15;", "y", 15),
             ("if (true) { let a = 5; return a;}", "a", 5),
+            ("if (true) { let a = 1; let b = 2; return 10;}", "b", 2),
         ];
         for test_input in test_inputs {
             test_update_env_individual(test_input);
