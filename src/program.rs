@@ -1,6 +1,6 @@
-use crate::ast::is_error;
 use crate::environment::Environment;
-use crate::types::{Integer, Object};
+use crate::statements::is_error;
+use crate::types::Object;
 use downcast_rs::{impl_downcast, Downcast};
 
 pub struct Program {
@@ -77,6 +77,9 @@ impl_downcast!(ProgramNode);
 #[cfg(test)]
 mod tests {
 
+    use super::*;
+    use crate::types::Integer;
+
     struct Test {
         value: i64,
     }
@@ -88,16 +91,14 @@ mod tests {
         fn token_literal(&self) -> Option<String> {
             return Some(format!("{}", self.value));
         }
-        fn eval(&self, env: &mut Environment) -> Option<Box<dyn Object>> {
+        fn eval(&self, _env: &mut Environment) -> Option<Box<dyn Object>> {
             return Some(Box::new(Integer { value: self.value }));
         }
 
-        fn update_env(&self, env: &mut Environment) -> Option<Vec<(String, Box<dyn Object>)>> {
+        fn update_env(&self, _env: &mut Environment) -> Option<Vec<(String, Box<dyn Object>)>> {
             return Some(vec![("Test".to_string(), Box::new(Integer { value: 5 }))]);
         }
     }
-
-    use super::*;
 
     #[test]
     fn test_program_node() {

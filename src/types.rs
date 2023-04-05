@@ -7,6 +7,7 @@ pub enum Type {
     BOOLEAN,
     NULL,
     ERROR,
+    FUNCTION,
 }
 
 pub trait Object: Downcast + Send {
@@ -16,25 +17,6 @@ pub trait Object: Downcast + Send {
 }
 
 impl_downcast!(Object);
-
-// trait ObjectClone {
-//     fn clone_box(&self) -> Box<dyn Object>;
-// }
-//
-// impl<T> ObjectClone for T
-// where
-//     T: 'static + Object + Clone,
-// {
-//     fn clone_box(&self) -> Box<dyn Object> {
-//         Box::new(self.clone())
-//     }
-// }
-//
-// impl Clone for Box<dyn Object> {
-//     fn clone(&self) -> Box<dyn Object> {
-//         self.clone_box()
-//     }
-// }
 
 pub struct Integer {
     pub value: i64,

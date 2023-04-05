@@ -3,7 +3,7 @@ use crate::program::ProgramNode;
 use crate::token::Token;
 use crate::types::{Boolean, Error, Integer, Object, Type};
 
-fn is_error(object: Option<&Box<dyn Object>>) -> bool {
+pub fn is_error(object: Option<&Box<dyn Object>>) -> bool {
     if object.is_some() {
         if object.as_ref().unwrap().type_() == Type::ERROR {
             return true;
@@ -42,7 +42,7 @@ impl ProgramNode for LetStatement {
         return self.token.literal.to_owned();
     }
 
-    fn eval(&self, env: &mut Environment) -> Option<Box<dyn Object>> {
+    fn eval(&self, _env: &mut Environment) -> Option<Box<dyn Object>> {
         return None;
     }
 
@@ -81,7 +81,7 @@ impl ProgramNode for ReturnStatement {
     fn eval(&self, env: &mut Environment) -> Option<Box<dyn Object>> {
         return self.value.eval(env);
     }
-    fn update_env(&self, env: &mut Environment) -> Option<Vec<(String, Box<dyn Object>)>> {
+    fn update_env(&self, _env: &mut Environment) -> Option<Vec<(String, Box<dyn Object>)>> {
         return None;
     }
 }
@@ -207,7 +207,7 @@ impl ProgramNode for IdentifierExpression {
     fn eval(&self, env: &mut Environment) -> Option<Box<dyn Object>> {
         return Some(env.get(&self.value));
     }
-    fn update_env(&self, env: &mut Environment) -> Option<Vec<(String, Box<dyn Object>)>> {
+    fn update_env(&self, _env: &mut Environment) -> Option<Vec<(String, Box<dyn Object>)>> {
         return None;
     }
 }
@@ -230,10 +230,10 @@ impl ProgramNode for IntegerLiteralExpression {
     fn token_literal(&self) -> Option<String> {
         return self.token.literal.to_owned();
     }
-    fn eval(&self, env: &mut Environment) -> Option<Box<dyn Object>> {
+    fn eval(&self, _env: &mut Environment) -> Option<Box<dyn Object>> {
         return Some(Box::new(Integer { value: self.value }));
     }
-    fn update_env(&self, env: &mut Environment) -> Option<Vec<(String, Box<dyn Object>)>> {
+    fn update_env(&self, _env: &mut Environment) -> Option<Vec<(String, Box<dyn Object>)>> {
         return None;
     }
 }
@@ -256,10 +256,10 @@ impl ProgramNode for BooleanExpression {
     fn token_literal(&self) -> Option<String> {
         return self.token.literal.to_owned();
     }
-    fn eval(&self, env: &mut Environment) -> Option<Box<dyn Object>> {
+    fn eval(&self, _env: &mut Environment) -> Option<Box<dyn Object>> {
         return Some(Box::new(Boolean { value: self.value }));
     }
-    fn update_env(&self, env: &mut Environment) -> Option<Vec<(String, Box<dyn Object>)>> {
+    fn update_env(&self, _env: &mut Environment) -> Option<Vec<(String, Box<dyn Object>)>> {
         return None;
     }
 }
@@ -330,7 +330,7 @@ impl ProgramNode for PrefixExpression {
         }
     }
 
-    fn update_env(&self, env: &mut Environment) -> Option<Vec<(String, Box<dyn Object>)>> {
+    fn update_env(&self, _env: &mut Environment) -> Option<Vec<(String, Box<dyn Object>)>> {
         return None;
     }
 }
@@ -442,7 +442,7 @@ impl ProgramNode for InfixExpression {
             }));
         }
     }
-    fn update_env(&self, env: &mut Environment) -> Option<Vec<(String, Box<dyn Object>)>> {
+    fn update_env(&self, _env: &mut Environment) -> Option<Vec<(String, Box<dyn Object>)>> {
         return None;
     }
 }
@@ -519,7 +519,7 @@ impl ProgramNode for IfExpression {
             return None;
         }
     }
-    fn update_env(&self, env: &mut Environment) -> Option<Vec<(String, Box<dyn Object>)>> {
+    fn update_env(&self, _env: &mut Environment) -> Option<Vec<(String, Box<dyn Object>)>> {
         return None;
     }
 }
@@ -559,10 +559,10 @@ impl ProgramNode for FunctionLiteralExpression {
     fn token_literal(&self) -> Option<String> {
         return self.token.literal.clone();
     }
-    fn eval(&self, env: &mut Environment) -> Option<Box<dyn Object>> {
+    fn eval(&self, _env: &mut Environment) -> Option<Box<dyn Object>> {
         todo!();
     }
-    fn update_env(&self, env: &mut Environment) -> Option<Vec<(String, Box<dyn Object>)>> {
+    fn update_env(&self, _env: &mut Environment) -> Option<Vec<(String, Box<dyn Object>)>> {
         todo!();
     }
 }
@@ -602,10 +602,10 @@ impl ProgramNode for CallExpression {
     fn token_literal(&self) -> Option<String> {
         return self.token.literal.clone();
     }
-    fn eval(&self, env: &mut Environment) -> Option<Box<dyn Object>> {
+    fn eval(&self, _env: &mut Environment) -> Option<Box<dyn Object>> {
         todo!();
     }
-    fn update_env(&self, env: &mut Environment) -> Option<Vec<(String, Box<dyn Object>)>> {
+    fn update_env(&self, _env: &mut Environment) -> Option<Vec<(String, Box<dyn Object>)>> {
         todo!();
     }
 }
