@@ -70,6 +70,7 @@ pub trait ProgramNode: Downcast {
     fn token_literal(&self) -> Option<String>;
     fn eval(&self, env: &mut Environment) -> Option<Box<dyn Object>>;
     fn update_env(&self, env: &mut Environment) -> Option<Vec<(String, Box<dyn Object>)>>;
+    fn get_copy(&self) -> Box<dyn ProgramNode>;
 }
 
 impl_downcast!(ProgramNode);
@@ -97,6 +98,10 @@ mod tests {
 
         fn update_env(&self, _env: &mut Environment) -> Option<Vec<(String, Box<dyn Object>)>> {
             return Some(vec![("Test".to_string(), Box::new(Integer { value: 5 }))]);
+        }
+
+        fn get_copy(&self) -> Box<dyn ProgramNode> {
+            return Box::new(Test { value: self.value });
         }
     }
 

@@ -170,7 +170,7 @@ impl Parser {
 
         return Box::new(LetStatement::new(
             og_token,
-            name,
+            Box::new(name),
             self.parse_expression(PrecedenceType::LOWEST),
         ));
     }
@@ -373,7 +373,7 @@ impl Parser {
         return Box::new(FunctionLiteralExpression::new(og_token, params, body));
     }
 
-    fn parse_function_parameters(&mut self) -> Vec<IdentifierExpression> {
+    fn parse_function_parameters(&mut self) -> Vec<Box<dyn ProgramNode>> {
         let mut identifiers = vec![];
         if self.peek_token_is(&TokenType::RPAREN) {
             self.next_token();
@@ -387,15 +387,15 @@ impl Parser {
             value: self.current_token.literal.clone().unwrap(),
         };
 
-        identifiers.push(ident);
+        identifiers.push(Box::new(ident));
 
         while self.peek_token_is(&TokenType::COMMA) {
             self.next_token();
             self.next_token();
-            identifiers.push(IdentifierExpression {
+            identifiers.push(Box::new(IdentifierExpression {
                 token: self.current_token.clone(),
                 value: self.current_token.literal.clone().unwrap(),
-            });
+            }));
         }
 
         if !self.expect_peek(&TokenType::RPAREN) {
@@ -482,8 +482,12 @@ mod tests {
             );
         }
 
-        if statement.name.value != name {
-            panic!("Name: {} != '{}'", statement.name.value, name);
+        let ident = statement
+            .name
+            .downcast_ref::<IdentifierExpression>()
+            .unwrap();
+        if ident.value != name {
+            panic!("Name: {} != '{}'", ident.value, name);
         }
 
         if statement.name.token_literal().unwrap() != name {

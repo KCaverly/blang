@@ -2,7 +2,7 @@ use crate::types::{Error, Object};
 use std::collections::HashMap;
 
 pub struct Environment {
-    store: HashMap<String, Box<dyn Object>>,
+    pub store: HashMap<String, Box<dyn Object>>,
 }
 
 impl Environment {
@@ -32,5 +32,13 @@ impl Environment {
             });
         }
         return obj.unwrap().get_box();
+    }
+
+    pub fn get_copy(&self) -> Environment {
+        let mut new_map: HashMap<String, Box<dyn Object>> = HashMap::new();
+        for (k, v) in &self.store {
+            new_map.insert(k.clone(), v.get_box());
+        }
+        return Environment { store: new_map };
     }
 }

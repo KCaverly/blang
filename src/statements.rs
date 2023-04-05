@@ -1,7 +1,7 @@
 use crate::environment::Environment;
 use crate::program::ProgramNode;
 use crate::token::Token;
-use crate::types::{Boolean, Error, Integer, Object, Type};
+use crate::types::{Boolean, Error, Function, Integer, Object, Type};
 
 pub fn is_error(object: Option<&Box<dyn Object>>) -> bool {
     if object.is_some() {
@@ -14,14 +14,14 @@ pub fn is_error(object: Option<&Box<dyn Object>>) -> bool {
 
 pub struct LetStatement {
     pub token: Token,
-    pub name: IdentifierExpression,
+    pub name: Box<dyn ProgramNode>,
     pub value: Box<dyn ProgramNode>,
 }
 
 impl LetStatement {
     pub fn new(
         token: Token,
-        name: IdentifierExpression,
+        name: Box<dyn ProgramNode>,
         value: Box<dyn ProgramNode>,
     ) -> LetStatement {
         return LetStatement { token, name, value };
@@ -54,6 +54,14 @@ impl ProgramNode for LetStatement {
 
         return None;
     }
+
+    fn get_copy(&self) -> Box<dyn ProgramNode> {
+        return Box::new(LetStatement {
+            token: self.token.clone(),
+            name: self.name.get_copy(),
+            value: self.value.get_copy(),
+        });
+    }
 }
 
 pub struct ReturnStatement {
@@ -84,6 +92,13 @@ impl ProgramNode for ReturnStatement {
     fn update_env(&self, _env: &mut Environment) -> Option<Vec<(String, Box<dyn Object>)>> {
         return None;
     }
+
+    fn get_copy(&self) -> Box<dyn ProgramNode> {
+        return Box::new(ReturnStatement {
+            token: self.token.clone(),
+            value: self.value.get_copy(),
+        });
+    }
 }
 
 pub struct ExpressionStatement {
@@ -109,6 +124,13 @@ impl ProgramNode for ExpressionStatement {
     }
     fn update_env(&self, env: &mut Environment) -> Option<Vec<(String, Box<dyn Object>)>> {
         return self.expression.update_env(env);
+    }
+
+    fn get_copy(&self) -> Box<dyn ProgramNode> {
+        return Box::new(ExpressionStatement {
+            token: self.token.clone(),
+            expression: self.expression.get_copy(),
+        });
     }
 }
 
@@ -184,6 +206,17 @@ impl ProgramNode for BlockStatement {
 
         return Some(updates);
     }
+
+    fn get_copy(&self) -> Box<dyn ProgramNode> {
+        let mut statements: Vec<Box<dyn ProgramNode>> = vec![];
+        for statement in &self.statements {
+            statements.push(statement.get_copy());
+        }
+        return Box::new(BlockStatement {
+            token: self.token.clone(),
+            statements: statements,
+        });
+    }
 }
 
 pub struct IdentifierExpression {
@@ -209,6 +242,13 @@ impl ProgramNode for IdentifierExpression {
     }
     fn update_env(&self, _env: &mut Environment) -> Option<Vec<(String, Box<dyn Object>)>> {
         return None;
+    }
+
+    fn get_copy(&self) -> Box<dyn ProgramNode> {
+        return Box::new(IdentifierExpression {
+            token: self.token.clone(),
+            value: self.value.clone(),
+        });
     }
 }
 
@@ -236,6 +276,12 @@ impl ProgramNode for IntegerLiteralExpression {
     fn update_env(&self, _env: &mut Environment) -> Option<Vec<(String, Box<dyn Object>)>> {
         return None;
     }
+    fn get_copy(&self) -> Box<dyn ProgramNode> {
+        return Box::new(IntegerLiteralExpression {
+            token: self.token.clone(),
+            value: self.value.clone(),
+        });
+    }
 }
 
 pub struct BooleanExpression {
@@ -261,6 +307,13 @@ impl ProgramNode for BooleanExpression {
     }
     fn update_env(&self, _env: &mut Environment) -> Option<Vec<(String, Box<dyn Object>)>> {
         return None;
+    }
+
+    fn get_copy(&self) -> Box<dyn ProgramNode> {
+        return Box::new(BooleanExpression {
+            token: self.token.clone(),
+            value: self.value.clone(),
+        });
     }
 }
 
@@ -332,6 +385,14 @@ impl ProgramNode for PrefixExpression {
 
     fn update_env(&self, _env: &mut Environment) -> Option<Vec<(String, Box<dyn Object>)>> {
         return None;
+    }
+
+    fn get_copy(&self) -> Box<dyn ProgramNode> {
+        return Box::new(PrefixExpression {
+            token: self.token.clone(),
+            operator: self.operator.clone(),
+            right: self.right.get_copy(),
+        });
     }
 }
 
@@ -445,6 +506,15 @@ impl ProgramNode for InfixExpression {
     fn update_env(&self, _env: &mut Environment) -> Option<Vec<(String, Box<dyn Object>)>> {
         return None;
     }
+
+    fn get_copy(&self) -> Box<dyn ProgramNode> {
+        return Box::new(InfixExpression {
+            token: self.token.clone(),
+            left: self.left.get_copy(),
+            operator: self.operator.clone(),
+            right: self.right.get_copy(),
+        });
+    }
 }
 
 pub struct IfExpression {
@@ -522,18 +592,33 @@ impl ProgramNode for IfExpression {
     fn update_env(&self, _env: &mut Environment) -> Option<Vec<(String, Box<dyn Object>)>> {
         return None;
     }
+
+    fn get_copy(&self) -> Box<dyn ProgramNode> {
+        let alt: Option<Box<dyn ProgramNode>>;
+        if self.alternative.is_some() {
+            alt = Some(self.alternative.as_ref().unwrap().get_copy());
+        } else {
+            alt = None;
+        }
+        return Box::new(IfExpression {
+            token: self.token.clone(),
+            condition: self.condition.get_copy(),
+            consequence: self.consequence.get_copy(),
+            alternative: alt,
+        });
+    }
 }
 
 pub struct FunctionLiteralExpression {
     token: Token,
-    pub parameters: Vec<IdentifierExpression>,
+    pub parameters: Vec<Box<dyn ProgramNode>>,
     pub body: Box<dyn ProgramNode>,
 }
 
 impl FunctionLiteralExpression {
     pub fn new(
         token: Token,
-        parameters: Vec<IdentifierExpression>,
+        parameters: Vec<Box<dyn ProgramNode>>,
         body: Box<dyn ProgramNode>,
     ) -> FunctionLiteralExpression {
         return FunctionLiteralExpression {
@@ -560,10 +645,30 @@ impl ProgramNode for FunctionLiteralExpression {
         return self.token.literal.clone();
     }
     fn eval(&self, _env: &mut Environment) -> Option<Box<dyn Object>> {
-        todo!();
+        let mut params: Vec<Box<dyn ProgramNode>> = vec![];
+        for param in &self.parameters {
+            params.push(param.get_copy());
+        }
+        return Some(Box::new(Function {
+            body: self.body.get_copy(),
+            env: _env.get_copy(),
+            parameters: params,
+        }));
     }
+
     fn update_env(&self, _env: &mut Environment) -> Option<Vec<(String, Box<dyn Object>)>> {
         todo!();
+    }
+    fn get_copy(&self) -> Box<dyn ProgramNode> {
+        let mut params: Vec<Box<dyn ProgramNode>> = vec![];
+        for param in &self.parameters {
+            params.push(param.get_copy());
+        }
+        return Box::new(FunctionLiteralExpression {
+            token: self.token.clone(),
+            parameters: params,
+            body: self.body.get_copy(),
+        });
     }
 }
 
@@ -603,9 +708,33 @@ impl ProgramNode for CallExpression {
         return self.token.literal.clone();
     }
     fn eval(&self, _env: &mut Environment) -> Option<Box<dyn Object>> {
-        todo!();
+        // Get Function Object
+        let og_fn = self.function.eval(_env).unwrap();
+        let og_fn_un = og_fn.downcast_ref::<Function>().unwrap();
+
+        // Evaluate Arguments
+        for idx in 0..self.arguments.len() {
+            let eval_ = self.arguments[idx].eval(_env).unwrap();
+            _env.update(og_fn_un.parameters[idx].token_literal().unwrap(), eval_);
+        }
+
+        let unwrapped = self.function.eval(_env).unwrap();
+        let fn_ = unwrapped.downcast_ref::<Function>().unwrap();
+
+        return fn_.body.eval(_env);
     }
     fn update_env(&self, _env: &mut Environment) -> Option<Vec<(String, Box<dyn Object>)>> {
-        todo!();
+        return None;
+    }
+    fn get_copy(&self) -> Box<dyn ProgramNode> {
+        let mut args: Vec<Box<dyn ProgramNode>> = vec![];
+        for arg in &self.arguments {
+            args.push(arg.get_copy());
+        }
+        return Box::new(CallExpression {
+            token: self.token.clone(),
+            function: self.function.get_copy(),
+            arguments: args,
+        });
     }
 }
