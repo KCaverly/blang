@@ -46,10 +46,10 @@ impl ProgramNode for LetStatement {
         return None;
     }
 
-    fn update_env(&self, env: &mut Environment) -> Option<(String, Box<dyn Object>)> {
+    fn update_env(&self, env: &mut Environment) -> Option<Vec<(String, Box<dyn Object>)>> {
         let result = self.value.eval(env);
         if result.is_some() {
-            return Some((self.name.to_string(), result.unwrap()));
+            return Some(vec![(self.name.to_string(), result.unwrap())]);
         }
 
         return None;
@@ -81,7 +81,7 @@ impl ProgramNode for ReturnStatement {
     fn eval(&self, env: &mut Environment) -> Option<Box<dyn Object>> {
         return self.value.eval(env);
     }
-    fn update_env(&self, env: &mut Environment) -> Option<(String, Box<dyn Object>)> {
+    fn update_env(&self, env: &mut Environment) -> Option<Vec<(String, Box<dyn Object>)>> {
         return None;
     }
 }
@@ -107,7 +107,7 @@ impl ProgramNode for ExpressionStatement {
     fn eval(&self, env: &mut Environment) -> Option<Box<dyn Object>> {
         return self.expression.eval(env);
     }
-    fn update_env(&self, env: &mut Environment) -> Option<(String, Box<dyn Object>)> {
+    fn update_env(&self, env: &mut Environment) -> Option<Vec<(String, Box<dyn Object>)>> {
         return self.expression.update_env(env);
     }
 }
@@ -150,14 +150,39 @@ impl ProgramNode for BlockStatement {
             let env_update = statement.update_env(env);
             if env_update.is_some() {
                 let unwrapped = env_update.unwrap();
-                env.update(unwrapped.0, unwrapped.1);
+                for update in unwrapped {
+                    env.update(update.0, update.1);
+                }
             }
         }
 
         return result;
     }
-    fn update_env(&self, env: &mut Environment) -> Option<(String, Box<dyn Object>)> {
-        todo!();
+    fn update_env(&self, env: &mut Environment) -> Option<Vec<(String, Box<dyn Object>)>> {
+        let mut updates: Vec<(String, Box<dyn Object>)> = vec![];
+        let mut result: Option<Box<dyn Object>>;
+        for statement in &self.statements {
+            result = statement.eval(env);
+
+            if statement.token_literal().unwrap() == "return" {
+                return Some(updates);
+            }
+
+            if is_error(result.as_ref()) {
+                return Some(updates);
+            }
+
+            let env_update = statement.update_env(env);
+            if env_update.is_some() {
+                let unwrapped = env_update.unwrap();
+                for update in unwrapped {
+                    env.update(update.0.clone(), update.1.get_box());
+                    updates.push((update.0, update.1));
+                }
+            }
+        }
+
+        return Some(updates);
     }
 }
 
@@ -182,7 +207,7 @@ impl ProgramNode for IdentifierExpression {
     fn eval(&self, env: &mut Environment) -> Option<Box<dyn Object>> {
         return Some(env.get(&self.value));
     }
-    fn update_env(&self, env: &mut Environment) -> Option<(String, Box<dyn Object>)> {
+    fn update_env(&self, env: &mut Environment) -> Option<Vec<(String, Box<dyn Object>)>> {
         return None;
     }
 }
@@ -208,7 +233,7 @@ impl ProgramNode for IntegerLiteralExpression {
     fn eval(&self, env: &mut Environment) -> Option<Box<dyn Object>> {
         return Some(Box::new(Integer { value: self.value }));
     }
-    fn update_env(&self, env: &mut Environment) -> Option<(String, Box<dyn Object>)> {
+    fn update_env(&self, env: &mut Environment) -> Option<Vec<(String, Box<dyn Object>)>> {
         return None;
     }
 }
@@ -234,7 +259,7 @@ impl ProgramNode for BooleanExpression {
     fn eval(&self, env: &mut Environment) -> Option<Box<dyn Object>> {
         return Some(Box::new(Boolean { value: self.value }));
     }
-    fn update_env(&self, env: &mut Environment) -> Option<(String, Box<dyn Object>)> {
+    fn update_env(&self, env: &mut Environment) -> Option<Vec<(String, Box<dyn Object>)>> {
         return None;
     }
 }
@@ -305,7 +330,7 @@ impl ProgramNode for PrefixExpression {
         }
     }
 
-    fn update_env(&self, env: &mut Environment) -> Option<(String, Box<dyn Object>)> {
+    fn update_env(&self, env: &mut Environment) -> Option<Vec<(String, Box<dyn Object>)>> {
         return None;
     }
 }
@@ -417,7 +442,7 @@ impl ProgramNode for InfixExpression {
             }));
         }
     }
-    fn update_env(&self, env: &mut Environment) -> Option<(String, Box<dyn Object>)> {
+    fn update_env(&self, env: &mut Environment) -> Option<Vec<(String, Box<dyn Object>)>> {
         return None;
     }
 }
@@ -494,7 +519,7 @@ impl ProgramNode for IfExpression {
             return None;
         }
     }
-    fn update_env(&self, env: &mut Environment) -> Option<(String, Box<dyn Object>)> {
+    fn update_env(&self, env: &mut Environment) -> Option<Vec<(String, Box<dyn Object>)>> {
         return None;
     }
 }
@@ -537,7 +562,7 @@ impl ProgramNode for FunctionLiteralExpression {
     fn eval(&self, env: &mut Environment) -> Option<Box<dyn Object>> {
         todo!();
     }
-    fn update_env(&self, env: &mut Environment) -> Option<(String, Box<dyn Object>)> {
+    fn update_env(&self, env: &mut Environment) -> Option<Vec<(String, Box<dyn Object>)>> {
         todo!();
     }
 }
@@ -580,7 +605,7 @@ impl ProgramNode for CallExpression {
     fn eval(&self, env: &mut Environment) -> Option<Box<dyn Object>> {
         todo!();
     }
-    fn update_env(&self, env: &mut Environment) -> Option<(String, Box<dyn Object>)> {
+    fn update_env(&self, env: &mut Environment) -> Option<Vec<(String, Box<dyn Object>)>> {
         todo!();
     }
 }

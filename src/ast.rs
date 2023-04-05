@@ -1485,7 +1485,11 @@ mod tests {
 
     #[test]
     fn test_update_env() {
-        let test_inputs = vec![("let x = 5; x", "x", 5), ("10; let y = 15;", "y", 15)];
+        let test_inputs = vec![
+            ("let x = 5; x", "x", 5),
+            ("10; let y = 15;", "y", 15),
+            ("if (true) { let a = 5; return a;}", "a", 5),
+        ];
         for test_input in test_inputs {
             test_update_env_individual(test_input);
         }

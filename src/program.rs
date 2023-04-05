@@ -52,7 +52,9 @@ impl Program {
             let env_update = self.statements[idx].update_env(&mut self.environment);
             if env_update.is_some() {
                 let unwrapped = env_update.unwrap();
-                self.update_env(unwrapped.0, unwrapped.1);
+                for update in unwrapped {
+                    self.update_env(update.0, update.1);
+                }
             }
 
             // Move Along
@@ -67,7 +69,7 @@ pub trait ProgramNode: Downcast {
     fn to_string(&self) -> String;
     fn token_literal(&self) -> Option<String>;
     fn eval(&self, env: &mut Environment) -> Option<Box<dyn Object>>;
-    fn update_env(&self, env: &mut Environment) -> Option<(String, Box<dyn Object>)>;
+    fn update_env(&self, env: &mut Environment) -> Option<Vec<(String, Box<dyn Object>)>>;
 }
 
 impl_downcast!(ProgramNode);
@@ -90,8 +92,8 @@ mod tests {
             return Some(Box::new(Integer { value: self.value }));
         }
 
-        fn update_env(&self, env: &mut Environment) -> Option<(String, Box<dyn Object>)> {
-            return Some(("Test".to_string(), Box::new(Integer { value: 5 })));
+        fn update_env(&self, env: &mut Environment) -> Option<Vec<(String, Box<dyn Object>)>> {
+            return Some(vec![("Test".to_string(), Box::new(Integer { value: 5 }))]);
         }
     }
 
