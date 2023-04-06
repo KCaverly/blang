@@ -11,6 +11,7 @@ pub enum Type {
     NULL,
     ERROR,
     FUNCTION,
+    STRING,
 }
 
 pub trait Object: Downcast {
@@ -51,6 +52,24 @@ impl Object for Boolean {
 
     fn get_box(&self) -> Box<dyn Object> {
         return Box::new(Boolean { value: self.value });
+    }
+}
+
+pub struct StringLiteral {
+    pub value: String,
+}
+
+impl Object for StringLiteral {
+    fn type_(&self) -> Type {
+        return Type::STRING;
+    }
+    fn inspect(&self) -> String {
+        return self.value.clone();
+    }
+    fn get_box(&self) -> Box<dyn Object> {
+        return Box::new(StringLiteral {
+            value: self.value.clone(),
+        });
     }
 }
 

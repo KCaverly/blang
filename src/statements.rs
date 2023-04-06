@@ -1,7 +1,7 @@
 use crate::environment::Environment;
 use crate::program::ProgramNode;
 use crate::token::Token;
-use crate::types::{Boolean, Error, Function, Integer, Object, Type};
+use crate::types::{Boolean, Error, Function, Integer, Object, StringLiteral, Type};
 
 pub fn is_error(object: Option<&Box<dyn Object>>) -> bool {
     if object.is_some() {
@@ -280,6 +280,44 @@ impl ProgramNode for IntegerLiteralExpression {
         return Box::new(IntegerLiteralExpression {
             token: self.token.clone(),
             value: self.value.clone(),
+        });
+    }
+}
+
+pub struct StringLiteralExpression {
+    token: Token,
+    pub string: String,
+}
+
+impl StringLiteralExpression {
+    pub fn new(token: Token, string: String) -> StringLiteralExpression {
+        return StringLiteralExpression { token, string };
+    }
+}
+
+impl ProgramNode for StringLiteralExpression {
+    fn to_string(&self) -> String {
+        return self.string.to_string();
+    }
+
+    fn token_literal(&self) -> Option<String> {
+        return self.token.literal.to_owned();
+    }
+
+    fn eval(&self, _env: &mut Environment) -> Option<Box<dyn Object>> {
+        return Some(Box::new(StringLiteral {
+            value: self.string.clone(),
+        }));
+    }
+
+    fn update_env(&self, _env: &mut Environment) -> Option<Vec<(String, Box<dyn Object>)>> {
+        return None;
+    }
+
+    fn get_copy(&self) -> Box<dyn ProgramNode> {
+        return Box::new(StringLiteralExpression {
+            token: self.token.clone(),
+            string: self.string.clone(),
         });
     }
 }

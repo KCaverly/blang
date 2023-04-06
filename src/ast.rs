@@ -7,8 +7,10 @@ use crate::statements::{
     BlockStatement, BooleanExpression, CallExpression, ExpressionStatement,
     FunctionLiteralExpression, IdentifierExpression, IfExpression, InfixExpression,
     IntegerLiteralExpression, LetStatement, PrefixExpression, ReturnStatement,
+    StringLiteralExpression,
 };
 use crate::token::{Token, TokenType};
+use crate::types::StringLiteral;
 use lazy_static::lazy_static;
 use std::collections::HashMap;
 
@@ -142,6 +144,7 @@ impl Parser {
             TokenType::TRUE => self.parse_expression_statement(),
             TokenType::FALSE => self.parse_expression_statement(),
             TokenType::LPAREN => self.parse_expression_statement(),
+            TokenType::STRING => self.parse_expression_statement(),
             TokenType::IF => self.parse_expression_statement(),
             TokenType::FUNCTION => self.parse_expression_statement(),
             _ => panic!("PANIC!"),
@@ -221,6 +224,7 @@ impl Parser {
             TokenType::FALSE => Some(self.parse_boolean_expression()),
             TokenType::LPAREN => Some(self.parse_grouped_expression()),
             TokenType::IF => Some(self.parse_if_expression()),
+            TokenType::STRING => Some(self.parse_string_expression()),
 
             _ => None,
         };
@@ -249,6 +253,13 @@ impl Parser {
             }
             return expr;
         }
+    }
+
+    fn parse_string_expression(&mut self) -> Box<dyn ProgramNode> {
+        return Box::new(StringLiteralExpression::new(
+            self.current_token.clone(),
+            self.current_token.clone().literal.unwrap(),
+        ));
     }
 
     fn parse_integer_expression(&mut self) -> Box<dyn ProgramNode> {
@@ -1035,5 +1046,26 @@ mod tests {
         assert!(program.environment.has_key(test_input.1));
         let val = program.environment.get(test_input.1);
         assert_eq!(val.downcast_ref::<Integer>().unwrap().value, test_input.2);
+    }
+
+    #[test]
+    fn test_eval_string() {
+        let test_inputs = vec![
+            (r#"let x = "test""#, "x", "test"),
+            (r#"let y = "test 2"; 10;"#, "y", "test 2"),
+        ];
+        for test_input in test_inputs {
+            let lexer = Lexer::new(test_input.0.to_string());
+            let mut parser = Parser::new(lexer);
+            let mut program = Program::new(parser.parse());
+            program.eval();
+
+            assert!(program.environment.has_key(test_input.1));
+            let val = program.environment.get(test_input.1);
+            assert_eq!(
+                val.downcast_ref::<StringLiteral>().unwrap().value,
+                test_input.2
+            );
+        }
     }
 }

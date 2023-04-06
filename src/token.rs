@@ -34,6 +34,8 @@ pub enum TokenType {
 
     TRUE,
     FALSE,
+
+    STRING,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

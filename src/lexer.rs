@@ -143,6 +143,58 @@ impl Lexer {
         return token;
     }
 
+    fn match_string_span(&mut self) -> Option<Token> {
+        let mut string_vec: Vec<char> = Vec::new();
+        if self.ch.is_none() {
+            return None;
+        }
+
+        if self.ch.unwrap() == '"' {
+            self.read_char();
+
+            if self.ch.is_none() {
+                return Some(Token::new(
+                    TokenType::ILLEGAL,
+                    Some("String is not terminated with double quotes"),
+                ));
+            }
+
+            let mut res: Option<Token> = None;
+            while (self.ch.unwrap().is_alphanumeric() || self.ch.unwrap().is_whitespace()) {
+                let next = self.peek_char();
+                string_vec.push(self.ch.unwrap());
+
+                if self.peek_char().is_some() {
+                    if self.peek_char().unwrap() == '"' {
+                        let string: String = string_vec.iter().collect();
+
+                        if string.len() == 0 {
+                            res = None;
+                            break;
+                        }
+                        res = Some(Token::new(TokenType::STRING, Some(&string)));
+                        break;
+                    }
+                }
+
+                self.read_char();
+
+                if self.ch.is_none() {
+                    res = Some(Token::new(
+                        TokenType::ILLEGAL,
+                        Some("String is not terminated with double quotes"),
+                    ));
+                    break;
+                }
+            }
+
+            self.read_char();
+            return res;
+        } else {
+            return None;
+        }
+    }
+
     fn match_numeric_span(&mut self) -> Option<Token> {
         let mut numeric: Vec<char> = Vec::new();
         if self.ch.is_none() {
@@ -198,6 +250,11 @@ impl Lexer {
         }
 
         token = self.match_numeric_span();
+        if token.is_some() {
+            return token.unwrap();
+        }
+
+        token = self.match_string_span();
         if token.is_some() {
             return token.unwrap();
         }
@@ -435,6 +492,24 @@ mod tests {
             Token::new(TokenType::NEQ, Some("!=")),
             Token::new(TokenType::INT, Some("9")),
             Token::new(TokenType::SEMICOLON, Some(";")),
+        ];
+
+        let mut lexer = Lexer::new(test_string.to_string());
+        for test_token in test_tokens {
+            let token = lexer.next_token();
+            assert_eq!(token, test_token);
+        }
+    }
+
+    #[test]
+    fn test_string_lexer() {
+        let test_string = r#"let x = "this is a test""#;
+
+        let test_tokens = vec![
+            Token::new(TokenType::LET, Some("let")),
+            Token::new(TokenType::IDENT, Some("x")),
+            Token::new(TokenType::ASSIGN, Some("=")),
+            Token::new(TokenType::STRING, Some("this is a test")),
         ];
 
         let mut lexer = Lexer::new(test_string.to_string());
