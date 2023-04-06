@@ -63,6 +63,13 @@ impl Program {
 
         return result;
     }
+
+    pub fn walk_back_error(&mut self) {
+        let result = self.statements[self.current_idx].eval(&mut self.environment);
+        if is_error(result.as_ref()) {
+            self.statements.remove(self.current_idx);
+        }
+    }
 }
 
 pub trait ProgramNode: Downcast {

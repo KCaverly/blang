@@ -1,6 +1,7 @@
 use crate::ast::Parser;
 use crate::lexer::Lexer;
 use crate::program::{Program, ProgramNode};
+use crate::statements::is_error;
 use std::io::{stdin, stdout, Write};
 
 pub struct REPL {
@@ -45,8 +46,13 @@ impl REPL {
             let statements = self.read();
             program.extend(statements);
             let result = program.eval();
-            if result.is_some() {
-                println!("{}", result.unwrap().inspect());
+
+            if result.as_ref().is_some() {
+                println!("{}", result.as_ref().unwrap().inspect());
+
+                if is_error(result.as_ref()) {
+                    program.walk_back_error();
+                }
             }
         }
     }
