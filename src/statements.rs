@@ -708,20 +708,24 @@ impl ProgramNode for CallExpression {
         return self.token.literal.clone();
     }
     fn eval(&self, _env: &mut Environment) -> Option<Box<dyn Object>> {
+        let mut scoped_env = _env.get_copy();
+
         // Get Function Object
-        let og_fn = self.function.eval(_env).unwrap();
+        let og_fn = self.function.eval(&mut scoped_env).unwrap();
         let og_fn_un = og_fn.downcast_ref::<Function>().unwrap();
 
         // Evaluate Arguments
         for idx in 0..self.arguments.len() {
-            let eval_ = self.arguments[idx].eval(_env).unwrap();
-            _env.update(og_fn_un.parameters[idx].token_literal().unwrap(), eval_);
+            let eval_ = self.arguments[idx].eval(&mut scoped_env).unwrap();
+            scoped_env.update(og_fn_un.parameters[idx].token_literal().unwrap(), eval_);
         }
 
-        let unwrapped = self.function.eval(_env).unwrap();
+        let unwrapped = self.function.eval(&mut scoped_env).unwrap();
         let fn_ = unwrapped.downcast_ref::<Function>().unwrap();
 
-        return fn_.body.eval(_env);
+        let result = fn_.body.eval(&mut scoped_env);
+
+        return result;
     }
     fn update_env(&self, _env: &mut Environment) -> Option<Vec<(String, Box<dyn Object>)>> {
         return None;
