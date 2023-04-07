@@ -10,7 +10,6 @@ use crate::statements::{
     StringLiteralExpression,
 };
 use crate::token::{Token, TokenType};
-use crate::types::StringLiteral;
 use lazy_static::lazy_static;
 use std::collections::HashMap;
 
@@ -454,6 +453,7 @@ mod tests {
     use crate::types::{Boolean, Integer, Type};
 
     use super::*;
+    use crate::types::StringLiteral;
 
     #[test]
     fn test_let_statements() {

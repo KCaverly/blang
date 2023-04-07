@@ -160,7 +160,10 @@ impl Lexer {
             }
 
             let mut res: Option<Token> = None;
-            while (self.ch.unwrap().is_alphanumeric() || self.ch.unwrap().is_whitespace()) {
+            while (self.ch.unwrap().is_alphanumeric()
+                || self.ch.unwrap().is_whitespace()
+                || self.ch.unwrap().is_ascii_punctuation())
+            {
                 let next = self.peek_char();
                 string_vec.push(self.ch.unwrap());
 
